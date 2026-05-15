@@ -27,7 +27,7 @@ part_2/
 ## Folder roles
 
 - `main.ipynb`  
-  The single Part 2 notebook is intended to become the complete raw-to-curated workflow.
+  The single assessor-friendly Part 2 notebook. It is intended to become the complete raw-to-curated workflow.
 
 - `data/raw/`  
   Original MYH Excel workbooks for application rounds 2020–2025. These are the immutable inputs.
@@ -44,26 +44,29 @@ The notebook is organized as a staged data journey:
 3. Project paths and raw-data inventory
 4. Source-file understanding
 5. Why `Tabell 3` is used, and why `Tabell 4` is not merged
-6. Initial curated-table design outline
+6. Target schema and harmonization specification
 7. Reusable ingestion and standardization
 8. Cleaning, normalization, and enrichment
 9. Validation and quality checks
 10. Export of the curated dataset
 11. SQL/API handoff note and final reflection
 
-## Implementation status after Sub-project 2.2
+## Implementation status after Sub-project 2.3
 
-Sub-project **2.2 — Source file exploration and evidence of understanding** is implemented in `main.ipynb`.
+Sub-project **2.3 — Target schema and harmonization specification** is implemented in `main.ipynb`.
 
-The notebook now includes rerunnable evidence for:
-- workbook and sheet inventory across the six MYH workbooks,
-- detection of the real header rows in `Tabell 3` and `Tabell 4`,
-- `Tabell 3` row counts, column counts, and identifier-quality checks,
-- `Tabell 4` grain evidence showing repeated application identifiers,
-- schema comparison across 2020–2025,
-- source-value differences in `Beslut` and `Huvudmannatyp` that will matter during later harmonization.
+The notebook now includes:
+- a locked 32-field curated applications-table proposal with explicit column order,
+- fixed traceability semantics for `source_year`, `source_file`, `source_sheet`, and `source_row`,
+- a source-to-target mapping table for the full target schema,
+- explicit include / harmonize / exclude decisions for every observed `Tabell 3` source column,
+- a structural-null policy for later-year-only fields,
+- finalized normalization mappings for:
+  - `Beslut` → `beslut_normalized`,
+  - `Huvudmannatyp` → `huvudmannatyp_normalized`,
+- design-level coverage checks confirming that all observed source values are mapped.
 
-The next bounded task is Sub-project **2.3 — Target schema and harmonization specification**.
+The next bounded task is Sub-project **2.4 — Reusable ingestion and standardization pipeline**.
 
 ## Raw vs processed strategy
 
@@ -77,13 +80,13 @@ The next bounded task is Sub-project **2.3 — Target schema and harmonization s
 No separate helper module is created at this stage. The project currently favors a clear, self-contained notebook.  
 If later code becomes repetitive enough to justify helper functions outside the notebook, that choice should be made explicitly and documented.
 
-## Sub-project 2.2 definition of done
+## Sub-project 2.3 definition of done
 
-This source-exploration step is complete when:
-- `part_2/main.ipynb` contains notebook-generated source evidence rather than source claims only,
-- the six raw workbooks are present under `part_2/data/raw/`,
-- the workbook/sheet inventory is visible,
-- header-row differences are detected and documented,
-- `Tabell 3` and `Tabell 4` grain evidence is generated,
-- schema variation across years is visible,
-- the project handoff clearly advances into Sub-project 2.3.
+This schema-design step is complete when:
+- `part_2/main.ipynb` shows the final curated main-table field set and column order,
+- traceability-field semantics are fixed, including `source_row` as a 1-based Excel row reference,
+- a source-to-target mapping table is visible,
+- every observed `Tabell 3` source column has an explicit keep / harmonize / exclude decision,
+- later-year-only fields have a documented structural-null policy,
+- normalized-value specifications for `Beslut` and `Huvudmannatyp` are formalized and checked,
+- the project handoff clearly advances into Sub-project 2.4.
