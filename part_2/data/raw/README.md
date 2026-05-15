@@ -1,13 +1,20 @@
 # Raw MYH Excel inputs
 
-Place the six original MYH application-round Excel workbooks for **2020–2025** in this folder.
+This folder contains the unchanged MYH application-round Excel workbooks used by Part 2.
 
-Rules for this folder:
+## Expected source workbooks
+
+- `resultat-ansokningsomgang-2020.xlsx`
+- `resultat-ansokningsomgang-2021.xlsx`
+- `resultat-ansokningsomgang-2022.xlsx`
+- `resultat-ansokningsomgang-2023.xlsx`
+- `resultat-ansokningsomgang-2024.xlsx`
+- `resultat-ansokningsomgang-2025.xlsx`
+
+## Rules for this folder
+
 - Keep raw source files unchanged.
 - Do not manually edit sheets, headers, values, or filenames after the notebook configuration has been written.
-- The notebook will later read from this folder through explicit import metadata/configuration.
-- These files are the reproducible input layer for the Part 2 curated dataset workflow.
-
-Expected use:
 - `part_2/main.ipynb` reads from this folder.
+- These files are the reproducible input layer for the Part 2 curated dataset workflow.
 - The final curated export is written elsewhere, under `part_2/data/processed/`.

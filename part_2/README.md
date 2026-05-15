@@ -12,6 +12,12 @@ part_2/
 └── data/
     ├── raw/
     │   ├── README.md
+    │   ├── resultat-ansokningsomgang-2020.xlsx
+    │   ├── resultat-ansokningsomgang-2021.xlsx
+    │   ├── resultat-ansokningsomgang-2022.xlsx
+    │   ├── resultat-ansokningsomgang-2023.xlsx
+    │   ├── resultat-ansokningsomgang-2024.xlsx
+    │   ├── resultat-ansokningsomgang-2025.xlsx
     │   └── .gitkeep
     └── processed/
         ├── README.md
@@ -21,7 +27,7 @@ part_2/
 ## Folder roles
 
 - `main.ipynb`  
-  The single Part 2 notebook which is intended to become the complete raw-to-curated workflow.
+  The single Part 2 notebook is intended to become the complete raw-to-curated workflow.
 
 - `data/raw/`  
   Original MYH Excel workbooks for application rounds 2020–2025. These are the immutable inputs.
@@ -45,7 +51,19 @@ The notebook is organized as a staged data journey:
 10. Export of the curated dataset
 11. SQL/API handoff note and final reflection
 
-Sub-project 2.1 establishes this architecture and notebook skeleton. Later sub-projects fill in the implementation section by section.
+## Implementation status after Sub-project 2.2
+
+Sub-project **2.2 — Source file exploration and evidence of understanding** is implemented in `main.ipynb`.
+
+The notebook now includes rerunnable evidence for:
+- workbook and sheet inventory across the six MYH workbooks,
+- detection of the real header rows in `Tabell 3` and `Tabell 4`,
+- `Tabell 3` row counts, column counts, and identifier-quality checks,
+- `Tabell 4` grain evidence showing repeated application identifiers,
+- schema comparison across 2020–2025,
+- source-value differences in `Beslut` and `Huvudmannatyp` that will matter during later harmonization.
+
+The next bounded task is Sub-project **2.3 — Target schema and harmonization specification**.
 
 ## Raw vs processed strategy
 
@@ -59,11 +77,13 @@ Sub-project 2.1 establishes this architecture and notebook skeleton. Later sub-p
 No separate helper module is created at this stage. The project currently favors a clear, self-contained notebook.  
 If later code becomes repetitive enough to justify helper functions outside the notebook, that choice should be made explicitly and documented.
 
-## Sub-project 2.1 definition of done
+## Sub-project 2.2 definition of done
 
-This setup step is complete when:
-- `part_2/main.ipynb` exists as the concrete notebook skeleton,
-- the Part 2 folder/data layout is settled,
-- raw and processed data roles are explicit,
-- the notebook contains a coherent section sequence aligned with the project roadmap,
-- the project control files are updated to hand off into Sub-project 2.2.
+This source-exploration step is complete when:
+- `part_2/main.ipynb` contains notebook-generated source evidence rather than source claims only,
+- the six raw workbooks are present under `part_2/data/raw/`,
+- the workbook/sheet inventory is visible,
+- header-row differences are detected and documented,
+- `Tabell 3` and `Tabell 4` grain evidence is generated,
+- schema variation across years is visible,
+- the project handoff clearly advances into Sub-project 2.3.
