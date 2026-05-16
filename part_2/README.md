@@ -51,22 +51,23 @@ The notebook is organized as a staged data journey:
 10. Export of the curated dataset
 11. SQL/API handoff note and final reflection
 
-## Implementation status after Sub-project 2.3
+## Implementation status after Sub-project 2.4
 
-Sub-project **2.3 — Target schema and harmonization specification** is implemented in `main.ipynb`.
+Sub-project **2.4 — Reusable ingestion and standardization pipeline** is implemented in `main.ipynb`.
 
 The notebook now includes:
-- a locked 32-field curated applications-table proposal with explicit column order,
-- fixed traceability semantics for `source_year`, `source_file`, `source_sheet`, and `source_row`,
-- a source-to-target mapping table for the full target schema,
-- explicit include / harmonize / exclude decisions for every observed `Tabell 3` source column,
-- a structural-null policy for later-year-only fields,
-- finalized normalization mappings for:
-  - `Beslut` → `beslut_normalized`,
-  - `Huvudmannatyp` → `huvudmannatyp_normalized`,
-- design-level coverage checks confirming that all observed source values are mapped.
+- explicit year-aware `source_import_config` metadata for `Tabell 3`,
+- a reusable `read_standardized_tabell_3(...)` reader,
+- source-to-target renaming for the agreed year-specific column-name variants,
+- populated portable traceability fields, including `source_row`,
+- structural-null placeholders for retained fields absent in older workbook years,
+- six standardized per-year DataFrames in `standardized_tabell_3_by_year`,
+- one combined preliminary table, `standardized_applications`, with **7,641 rows × 32 columns**,
+- ingestion assertions for schema order, row-count preservation, portable filenames, application-key integrity, and the structural-null policy.
 
-The next bounded task is Sub-project **2.4 — Reusable ingestion and standardization pipeline**.
+Normalization, datatype conversion, and convenience-derived field population are intentionally still deferred. Those belong to Sub-project **2.5 — Cleaning, normalization, and thoughtful enrichment**.
+
+The next bounded task is Sub-project **2.5 — Cleaning, normalization, and thoughtful enrichment**.
 
 ## Raw vs processed strategy
 
@@ -80,13 +81,15 @@ The next bounded task is Sub-project **2.4 — Reusable ingestion and standardiz
 No separate helper module is created at this stage. The project currently favors a clear, self-contained notebook.  
 If later code becomes repetitive enough to justify helper functions outside the notebook, that choice should be made explicitly and documented.
 
-## Sub-project 2.3 definition of done
+## Sub-project 2.4 definition of done
 
-This schema-design step is complete when:
-- `part_2/main.ipynb` shows the final curated main-table field set and column order,
-- traceability-field semantics are fixed, including `source_row` as a 1-based Excel row reference,
-- a source-to-target mapping table is visible,
-- every observed `Tabell 3` source column has an explicit keep / harmonize / exclude decision,
-- later-year-only fields have a documented structural-null policy,
-- normalized-value specifications for `Beslut` and `Huvudmannatyp` are formalized and checked,
-- the project handoff clearly advances into Sub-project 2.4.
+This ingestion step is complete when:
+- `part_2/main.ipynb` contains explicit year-aware `Tabell 3` import metadata,
+- one reusable standardized reader is used for all six MYH source years,
+- source-name variants are harmonized into stable target columns,
+- traceability fields are populated for every imported application row,
+- structural-null placeholders are created where the locked schema intentionally exceeds older source-year coverage,
+- `standardized_tabell_3_by_year` contains six aligned per-year tables,
+- `standardized_applications` concatenates them into the preliminary 32-column applications base,
+- ingestion-scoped checks confirm row-count preservation, schema order, portable filenames, application-key integrity, and structural-null expectations,
+- the project handoff clearly advances into Sub-project 2.5.
