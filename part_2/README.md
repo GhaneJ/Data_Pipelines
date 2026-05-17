@@ -51,23 +51,26 @@ The notebook is organized as a staged data journey:
 10. Export of the curated dataset
 11. SQL/API handoff note and final reflection
 
-## Implementation status after Sub-project 2.4
+## Implementation status after Sub-project 2.5
 
-Sub-project **2.4 — Reusable ingestion and standardization pipeline** is implemented in `main.ipynb`.
+Sub-project **2.5 — Cleaning, normalization, and thoughtful enrichment** is implemented in `main.ipynb`.
 
 The notebook now includes:
-- explicit year-aware `source_import_config` metadata for `Tabell 3`,
-- a reusable `read_standardized_tabell_3(...)` reader,
-- source-to-target renaming for the agreed year-specific column-name variants,
-- populated portable traceability fields, including `source_row`,
-- structural-null placeholders for retained fields absent in older workbook years,
-- six standardized per-year DataFrames in `standardized_tabell_3_by_year`,
-- one combined preliminary table, `standardized_applications`, with **7,641 rows × 32 columns**,
-- ingestion assertions for schema order, row-count preservation, portable filenames, application-key integrity, and the structural-null policy.
+- the inherited Sub-project 2.4 reader `read_standardized_tabell_3(...)` keeps `seqf_niva`, `sokta_platser_per_utbildningsomgang`, `sokta_platser_totalt`, and `beviljade_platser_totalt` concat-stable as nullable `Int64` before cross-year concatenation, so sparse structural-null years do not trigger dtype-inference drift or warnings,
+- `apply_cleaning_layer(...)`, which creates `cleaned_applications` without mutating `standardized_applications`,
+- conservative whitespace cleanup for configured source-text fields,
+- nullable `Int64` revalidation for those four structurally sparse later-year integer fields,
+- `add_normalization_and_enrichment(...)`, which creates `curated_applications`,
+- populated `beslut_normalized` and `huvudmannatyp_normalized` fields using the locked 2.3 mapping rules,
+- populated nullable-boolean convenience fields:
+  - `is_approved`,
+  - `is_distance_based`,
+  - `has_multiple_municipalities`,
+- transformation-scoped assertions for rerun safety, input-table preservation, schema order, row-count preservation, dtype intent, conservative text-cleanup intent, and allowed normalized-value domains.
 
-Normalization, datatype conversion, and convenience-derived field population are intentionally still deferred. Those belong to Sub-project **2.5 — Cleaning, normalization, and thoughtful enrichment**.
+The curated working table remains **7,641 rows × 32 columns**. Broader dataset validation, final export, and later SQL/API-facing handoff work are intentionally still deferred.
 
-The next bounded task is Sub-project **2.5 — Cleaning, normalization, and thoughtful enrichment**.
+The next bounded task is Sub-project **2.6 — Validation, quality checks, and export**.
 
 ## Raw vs processed strategy
 
@@ -81,15 +84,13 @@ The next bounded task is Sub-project **2.5 — Cleaning, normalization, and thou
 No separate helper module is created at this stage. The project currently favors a clear, self-contained notebook.  
 If later code becomes repetitive enough to justify helper functions outside the notebook, that choice should be made explicitly and documented.
 
-## Sub-project 2.4 definition of done
+## Sub-project 2.5 definition of done
 
-This ingestion step is complete when:
-- `part_2/main.ipynb` contains explicit year-aware `Tabell 3` import metadata,
-- one reusable standardized reader is used for all six MYH source years,
-- source-name variants are harmonized into stable target columns,
-- traceability fields are populated for every imported application row,
-- structural-null placeholders are created where the locked schema intentionally exceeds older source-year coverage,
-- `standardized_tabell_3_by_year` contains six aligned per-year tables,
-- `standardized_applications` concatenates them into the preliminary 32-column applications base,
-- ingestion-scoped checks confirm row-count preservation, schema order, portable filenames, application-key integrity, and structural-null expectations,
-- the project handoff clearly advances into Sub-project 2.5.
+This cleaning/enrichment step is complete when:
+- `part_2/main.ipynb` keeps the 2.4 standardized ingestion table intact and builds cleaning logic on top of it,
+- text cleanup is conservative, documented, and does not rewrite substantive source wording,
+- the sparse later-year integer columns inherited from the 2.4 ingestion base remain concat-stable and nullable `Int64` through the 2.5 layer, preserving structural nulls,
+- `curated_applications` contains the locked normalized decision/provider fields and the three derived boolean fields,
+- transformation checks confirm that the result is deterministic and safe to rerun from `standardized_applications`,
+- the notebook opening status block names Sub-project 2.5 as complete and reserves only Sub-projects 2.6–2.7 as pending,
+- the project handoff clearly advances into Sub-project 2.6.
