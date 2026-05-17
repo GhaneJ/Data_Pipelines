@@ -1,8 +1,8 @@
 # Processed Part 2 exports
 
-This folder contains notebook-generated processed outputs for the Part 2 MYH curated applications dataset.
+This folder contains notebook-generated processed outputs for the final Part 2 MYH curated applications dataset.
 
-## Canonical Sub-project 2.6 exports
+## Canonical final Part 2 exports
 
 - `myh_curated_applications_2020_2025.csv`  
   The validated curated longitudinal applications dataset created from the six raw MYH Excel workbooks for application rounds 2020–2025, stored in a transparent text format that is easy to inspect.
@@ -12,7 +12,7 @@ This folder contains notebook-generated processed outputs for the Part 2 MYH cur
 
 ## Export contract
 
-Both files are written by `part_2/main.ipynb` only after the Sub-project 2.6 quality gate passes.
+Both files are written by `part_2/main.ipynb` only after the final quality gate passes.
 
 - Source DataFrame: `curated_applications`
 - Grain: one row = one application in one MYH application round
@@ -32,13 +32,26 @@ Both files are written by `part_2/main.ipynb` only after the Sub-project 2.6 qua
 - Index: not exported
 - Local dependency: PyArrow must be installed for the notebook's Parquet export path; the notebook raises a targeted message if it is missing
 
-## Latest CSV + Parquet decision
+## Why both exports are retained
 
-The final Sub-project 2.6 decision is to retain **both** export formats:
+The final Part 2 decision is to retain **both** export formats:
 - CSV remains the simplest inspection and exchange artifact,
 - Parquet adds a typed, machine-friendly companion output for downstream analytical or loading work.
 
-This supersedes the earlier CSV-only implementation draft. Both files are generated from the same validated curated table and are checked after writing so the paired exports remain structurally aligned.
+Both files are generated from the same validated curated table and are checked after writing so the paired exports remain structurally aligned.
+
+## SQL/API handoff
+
+The later SQL/API phase can rely on these paired files as the finished serialized forms of the Part 2 curated dataset. They carry the same table grain, year scope, locked schema, and application-key safety verified in the notebook.
+
+The downstream loader may choose CSV or Parquet based on tooling, but it should preserve:
+- the uniqueness rule represented by `(source_year, diarienummer)`,
+- source-traceability fields,
+- normalized categorical fields,
+- derived boolean read-model fields,
+- and structural nulls where older workbooks did not contain later-year concepts.
+
+The detailed handoff rationale is recorded in Section 12 of `part_2/main.ipynb`.
 
 ## Rules for this folder
 
