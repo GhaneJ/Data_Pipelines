@@ -40,9 +40,9 @@ The final Part 2 decision is to retain **both** export formats:
 
 Both files are generated from the same validated curated table and are checked after writing so the paired exports remain structurally aligned.
 
-## SQL/API handoff
+## SQL loading handoff
 
-The later SQL/API phase can rely on these paired files as the finished serialized forms of the Part 2 curated dataset. They carry the same table grain, year scope, locked schema, and application-key safety verified in the notebook.
+The later SQL loading phase can rely on these paired files as the finished serialized forms of the Part 2 curated dataset. They carry the same table grain, year scope, locked schema, and application-key safety verified in the notebook.
 
 The downstream loader may choose CSV or Parquet based on tooling, but it should preserve:
 - the uniqueness rule represented by `(source_year, diarienummer)`,
@@ -51,7 +51,7 @@ The downstream loader may choose CSV or Parquet based on tooling, but it should 
 - derived boolean read-model fields,
 - and structural nulls where older workbooks did not contain later-year concepts.
 
-The detailed handoff rationale is recorded in Section 12 of `part_2/main.ipynb`.
+The detailed SQL handoff rationale is recorded in Section 12 of `part_2/main.ipynb`.
 
 ## Rules for this folder
 

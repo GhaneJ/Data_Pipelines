@@ -29,13 +29,13 @@ part_2/
 ## Folder roles
 
 - `main.ipynb`  
-  The single assessor-friendly Part 2 notebook. It now runs from raw Excel discovery through curated-table validation, paired CSV/Parquet export, final reflection, and the SQL/API handoff note.
+  The single assessor-friendly Part 2 notebook. It now runs from raw Excel discovery through curated-table validation, paired CSV/Parquet export, final reflection, and the SQL handoff note.
 
 - `data/raw/`  
   Original MYH Excel workbooks for application rounds 2020–2025. These are the immutable inputs.
 
 - `data/processed/`  
-  Notebook-generated curated exports and their local export-contract documentation. These are the finished Part 2 outputs intended for later SQL/API continuation.
+  Notebook-generated curated exports and their local export-contract documentation. These are the finished Part 2 outputs intended for the later SQL-loading phase.
 
 ## Notebook blueprint
 
@@ -51,11 +51,11 @@ The notebook is organized as one staged data journey:
 8. Cleaning, normalization, and enrichment
 9. Validation and quality checks
 10. Export of the curated dataset
-11. SQL/API handoff note, final reflection, and Part 2 definition-of-done check
+11. SQL handoff note, final reflection, and Part 2 definition-of-done check
 
 ## Part 2 completion status after Sub-project 2.7
 
-Sub-project **2.7 — Final notebook polish and SQL/API handoff** closes Part 2.
+Sub-project **2.7 — Final notebook polish and SQL handoff** closes Part 2.
 
 The final notebook now:
 - reads the six raw MYH Excel files from `data/raw/` from the start,
@@ -68,7 +68,7 @@ The final notebook now:
   - `data/processed/myh_curated_applications_2020_2025.csv`,
   - `data/processed/myh_curated_applications_2020_2025.parquet`,
 - re-reads both saved exports after writing to verify structural integrity and application-key safety,
-- ends with a concise SQL/API handoff note, final reflection, and definition-of-done check.
+- ends with a concise SQL handoff note, final reflection, and definition-of-done check.
 
 The final full rerun/export confirmation for this handoff produced:
 - **7,641 rows × 32 columns** in both CSV and Parquet,
@@ -92,7 +92,7 @@ The final polish matters because Part 2 is not only a collection of code cells. 
 ## Optional helper code
 
 No separate helper module is created at this stage. The project continues to favor a clear, self-contained notebook.  
-If later SQL/API code grows beyond a compact next-phase implementation, that should be organized deliberately in the later phase rather than retrofitted into Part 2.
+If later Part 3 database or service code grows beyond a compact next-phase implementation, that should be organized deliberately in the later phase rather than retrofitted into Part 2.
 
 ## Part 2 definition of done
 
@@ -103,5 +103,5 @@ Part 2 is complete because:
 - the final curated table remains schema-locked, traceable, and grain-safe,
 - both final processed exports are written into `part_2/data/processed/`,
 - post-write verification confirms that the exported files remain structurally correct,
-- the notebook closes with a SQL/API handoff note and final reflection,
-- the implementation is ready to continue into later SQL database loading and read-oriented API work.
+- the notebook closes with a SQL handoff note and final reflection,
+- the implementation is ready to continue into the later SQL database-loading phase.
