@@ -63,16 +63,13 @@ part_3/
         providers.py
         stats.py
         exports.py
-        auth.py
       schemas/
         applications.py
-        auth.py
       sql/
         schema.sql
         indexes.sql
       scripts/
         load_curated_data.py
-        seed_data.py
         validate_database.py
   frontend/
 ```
@@ -92,16 +89,12 @@ education_areas
 locations
 decisions
 principal_types
+study_forms
 ```
 
-Optional support tables when authentication is implemented:
+No authentication/RBAC tables are part of the current database plan.
 
-```text
-users
-roles
-```
-
-The `applications` table remains the central table. Repeated high-value fields such as provider, education area, location, decision, and principal type can be moved into lookup tables. Smaller descriptive fields can stay directly in `applications` when a separate table would not add clear value.
+The `applications` table remains the central table. Repeated high-value fields such as provider, education area, location, decision, principal type, and study form can be moved into lookup tables. Smaller descriptive fields can stay directly in `applications` when a separate table would not add clear value.
 
 The schema should preserve traceability fields from the curated dataset, including:
 
@@ -120,12 +113,13 @@ Use simple indexes that support common filters and lookups:
 ```text
 applications(diarienummer)
 applications(source_year)
-applications(decision_id)
+applications(decision_code)
 applications(provider_id)
 applications(education_area_id)
 applications(location_id)
-applications(source_year, decision_id)
-providers(provider_name)
+applications(study_form_id)
+applications(source_year, decision_code)
+providers(utbildningsanordnare)
 locations(lan, kommun)
 ```
 
@@ -180,34 +174,15 @@ offset=0
 max_limit=500
 ```
 
-## Authentication plan
+## Authentication/RBAC boundary
 
-Authentication and role-based authorization can be added after the read API is stable.
-
-Recommended simple roles:
-
-```text
-viewer
-analyst
-admin
-```
-
-Authentication should stay small and demo-friendly. It should not turn the project into a user-management product.
+Authentication and role-based authorization are not part of the current implementation path. The Part 3 solution should first prove the database and read API over the curated dataset.
 
 ## Seed data plan
 
-Seed data should be separated from the curated dataset loader.
+Seed data should not be added unless it has a clear purpose.
 
-The curated loader imports the real Part 2 dataset.
-
-The seed script can create supporting records such as:
-
-```text
-roles
-demo users
-```
-
-Seed scripts should be idempotent, so they can be safely run more than once.
+For Sub-project 3.2, no seed script is needed because the real curated CSV is loaded directly into PostgreSQL.
 
 ## Frontend plan
 
@@ -216,7 +191,6 @@ React should be added after the backend API is usable.
 Planned pages:
 
 ```text
-Login page
 Applications table
 Application detail page
 Statistics dashboard
@@ -230,7 +204,6 @@ pagination
 selectable page size
 filters
 trend charts for 2020-2025
-role-aware navigation if authentication is implemented
 ```
 
 The frontend should show that the API can be consumed by another part of a system.
@@ -239,12 +212,11 @@ The frontend should show that the API can be consumed by another part of a syste
 
 ```text
 3.1 Architecture and contracts
-3.2 PostgreSQL schema, indexes, curated CSV loader, seed data, validation
+3.2 PostgreSQL schema, indexes, curated CSV loader, validation
 3.3 Core FastAPI read API
 3.4 Filters, statistics, trends, and exports
-3.5 Simple authentication and role-based authorization
-3.6 React frontend
-3.7 Testing, documentation, and presentation readiness
+3.5 React frontend
+3.6 Testing, documentation, and presentation readiness
 ```
 
 ## Git policy
