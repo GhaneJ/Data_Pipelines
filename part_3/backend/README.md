@@ -22,7 +22,7 @@ backend/
   requirements.txt
 ```
 
-Sub-project 3.2 created the PostgreSQL database layer. Sub-project 3.3 adds the core FastAPI read API on top of the validated database.
+Sub-project 3.2 created the PostgreSQL database layer. Sub-project 3.3 added the core FastAPI read API on top of the validated database. Sub-project 3.4 extends the API with richer statistics and provider browsing.
 
 ## Technology choices
 
@@ -38,19 +38,9 @@ No ORM is used.
 
 ## Install dependencies
 
-From `part_3`:
+From `part_3`, use the Python environment you normally run this project with:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r backend/requirements.txt
-```
-
-On Windows PowerShell:
-
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
 pip install -r backend/requirements.txt
 ```
 
@@ -186,6 +176,97 @@ curl "http://127.0.0.1:8000/stats/by-year"
 
 The response includes total applications, decision counts, and approval rate per source year.
 
+### Regional statistics
+
+```text
+GET /stats/by-region
+```
+
+Example:
+
+```bash
+curl "http://127.0.0.1:8000/stats/by-region"
+```
+
+The response groups applications by `lan` and includes total applications, decision counts, and approval rate.
+
+### Education-area statistics
+
+```text
+GET /stats/by-education-area
+```
+
+Example:
+
+```bash
+curl "http://127.0.0.1:8000/stats/by-education-area"
+```
+
+The response groups applications by `utbildningsomrade` and includes total applications, decision counts, and approval rate.
+
+### Decision statistics
+
+```text
+GET /stats/by-decision
+```
+
+Example:
+
+```bash
+curl "http://127.0.0.1:8000/stats/by-decision"
+```
+
+The response shows how many applications have each normalized decision and each decision's share of the full dataset.
+
+## Provider browsing endpoints
+
+### List providers
+
+```text
+GET /providers
+```
+
+The response contains pagination metadata and an `items` list. Provider URLs use numeric `provider_id` values from the database so the path stays stable and URL-safe.
+
+Supported query parameters:
+
+```text
+q
+limit
+offset
+```
+
+Examples:
+
+```bash
+curl "http://127.0.0.1:8000/providers?limit=10"
+```
+
+```bash
+curl "http://127.0.0.1:8000/providers?q=KYH&limit=5"
+```
+
+### List applications for one provider
+
+```text
+GET /providers/{provider_id}/applications
+```
+
+Supported query parameters:
+
+```text
+limit
+offset
+```
+
+Example:
+
+```bash
+curl "http://127.0.0.1:8000/providers/1/applications?limit=10"
+```
+
+Use `GET /providers` first to find the `provider_id`.
+
 ## Optional local smoke test
 
 Start the API first, then run:
@@ -199,4 +280,9 @@ The smoke test checks:
 - `/health`,
 - `/applications` with filters and pagination,
 - `/applications/{diarienummer}` using one returned record,
-- `/stats/by-year` year coverage.
+- `/stats/by-year` year coverage,
+- `/stats/by-region`,
+- `/stats/by-education-area`,
+- `/stats/by-decision`,
+- `/providers`,
+- `/providers/{provider_id}/applications`.

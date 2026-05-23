@@ -13,14 +13,28 @@ from backend.app.queries import (
     ApplicationFilters,
     fetch_application_by_diarienummer,
     fetch_applications,
+    fetch_provider_applications,
+    fetch_provider_by_id,
+    fetch_providers,
+    fetch_stats_by_decision,
+    fetch_stats_by_education_area,
+    fetch_stats_by_region,
     fetch_stats_by_year,
 )
-from backend.app.schemas import Application, ApplicationList, YearStats
+from backend.app.schemas import (
+    Application,
+    ApplicationList,
+    DecisionStats,
+    EducationAreaStats,
+    ProviderList,
+    RegionStats,
+    YearStats,
+)
 
 
 app = FastAPI(
     title="MYH Applications API",
-    version="0.3.3",
+    version="0.3.4",
     description="Read API for the curated MYH applications dataset stored in PostgreSQL.",
 )
 
@@ -102,3 +116,49 @@ def get_application(diarienummer: str, conn: DatabaseConnection) -> dict[str, An
 def get_stats_by_year(conn: DatabaseConnection) -> list[dict[str, Any]]:
     """Return application counts and approval rate grouped by source year."""
     return fetch_stats_by_year(conn)
+
+
+@app.get("/stats/by-region", response_model=list[RegionStats])
+def get_stats_by_region(conn: DatabaseConnection) -> list[dict[str, Any]]:
+    """Return application counts and approval rate grouped by län/region."""
+    return fetch_stats_by_region(conn)
+
+
+@app.get("/stats/by-education-area", response_model=list[EducationAreaStats])
+def get_stats_by_education_area(conn: DatabaseConnection) -> list[dict[str, Any]]:
+    """Return application counts and approval rate grouped by education area."""
+    return fetch_stats_by_education_area(conn)
+
+
+@app.get("/stats/by-decision", response_model=list[DecisionStats])
+def get_stats_by_decision(conn: DatabaseConnection) -> list[dict[str, Any]]:
+    """Return application counts grouped by normalized decision."""
+    return fetch_stats_by_decision(conn)
+
+
+@app.get("/providers", response_model=ProviderList)
+def list_providers(
+    conn: DatabaseConnection,
+    q: Annotated[str | None, Query(description="Optional partial provider-name search.")] = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> dict[str, Any]:
+    """List providers with application counts and simple name search."""
+    return fetch_providers(conn, search=q, limit=limit, offset=offset)
+
+
+@app.get("/providers/{provider_id}/applications", response_model=ApplicationList)
+def list_provider_applications(
+    provider_id: int,
+    conn: DatabaseConnection,
+    limit: Annotated[int, Query(ge=1, le=500)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> dict[str, Any]:
+    """List applications for one provider id."""
+    provider = fetch_provider_by_id(conn, provider_id)
+    if provider is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Provider id {provider_id!r} was not found.",
+        )
+    return fetch_provider_applications(conn, provider_id=provider_id, limit=limit, offset=offset)
