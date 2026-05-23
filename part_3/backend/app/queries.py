@@ -180,3 +180,72 @@ def fetch_stats_by_year(conn: psycopg.Connection[dict[str, Any]]) -> list[dict[s
     with conn.cursor() as cursor:
         cursor.execute(sql)
         return cursor.fetchall()
+
+
+def fetch_stats_by_region(conn: psycopg.Connection[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return application statistics grouped by Swedish län/region."""
+    sql = """
+    SELECT
+        l.lan,
+        COUNT(*)::integer AS total_applications,
+        SUM(CASE WHEN a.decision_code = 'approved' THEN 1 ELSE 0 END)::integer AS approved_applications,
+        SUM(CASE WHEN a.decision_code = 'rejected' THEN 1 ELSE 0 END)::integer AS rejected_applications,
+        SUM(CASE WHEN a.decision_code = 'withdrawn' THEN 1 ELSE 0 END)::integer AS withdrawn_applications,
+        ROUND(
+            SUM(CASE WHEN a.decision_code = 'approved' THEN 1 ELSE 0 END) * 100.0 / COUNT(*),
+            1
+        )::float AS approval_rate_percent
+    FROM applications a
+    JOIN locations l ON l.location_id = a.location_id
+    GROUP BY l.lan
+    ORDER BY total_applications DESC, l.lan;
+    """
+    with conn.cursor() as cursor:
+        cursor.execute(sql)
+        return cursor.fetchall()
+
+
+def fetch_stats_by_education_area(conn: psycopg.Connection[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return application statistics grouped by education area."""
+    sql = """
+    SELECT
+        e.education_area_id,
+        e.utbildningsomrade,
+        COUNT(*)::integer AS total_applications,
+        SUM(CASE WHEN a.decision_code = 'approved' THEN 1 ELSE 0 END)::integer AS approved_applications,
+        SUM(CASE WHEN a.decision_code = 'rejected' THEN 1 ELSE 0 END)::integer AS rejected_applications,
+        SUM(CASE WHEN a.decision_code = 'withdrawn' THEN 1 ELSE 0 END)::integer AS withdrawn_applications,
+        ROUND(
+            SUM(CASE WHEN a.decision_code = 'approved' THEN 1 ELSE 0 END) * 100.0 / COUNT(*),
+            1
+        )::float AS approval_rate_percent
+    FROM applications a
+    JOIN education_areas e ON e.education_area_id = a.education_area_id
+    GROUP BY e.education_area_id, e.utbildningsomrade
+    ORDER BY total_applications DESC, e.utbildningsomrade;
+    """
+    with conn.cursor() as cursor:
+        cursor.execute(sql)
+        return cursor.fetchall()
+
+
+def fetch_stats_by_decision(conn: psycopg.Connection[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return application counts grouped by normalized decision."""
+    sql = """
+    SELECT
+        d.decision_code,
+        d.decision_label,
+        COUNT(a.diarienummer)::integer AS total_applications,
+        ROUND(
+            COUNT(a.diarienummer) * 100.0 / NULLIF((SELECT COUNT(*) FROM applications), 0),
+            1
+        )::float AS application_share_percent
+    FROM decisions d
+    LEFT JOIN applications a ON a.decision_code = d.decision_code
+    GROUP BY d.decision_code, d.decision_label
+    ORDER BY total_applications DESC, d.decision_code;
+    """
+    with conn.cursor() as cursor:
+        cursor.execute(sql)
+        return cursor.fetchall()
+

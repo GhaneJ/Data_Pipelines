@@ -62,3 +62,36 @@ class YearStats(BaseModel):
     rejected_applications: int
     withdrawn_applications: int
     approval_rate_percent: float
+
+
+class RegionStats(BaseModel):
+    """Application statistics grouped by län/region."""
+
+    lan: str
+    total_applications: int
+    approved_applications: int
+    rejected_applications: int
+    withdrawn_applications: int
+    approval_rate_percent: float
+
+
+class EducationAreaStats(BaseModel):
+    """Application statistics grouped by education area."""
+
+    education_area_id: int
+    utbildningsomrade: str
+    total_applications: int
+    approved_applications: int
+    rejected_applications: int
+    withdrawn_applications: int
+    approval_rate_percent: float
+
+
+class DecisionStats(BaseModel):
+    """Application statistics grouped by normalized decision."""
+
+    decision_code: str
+    decision_label: str
+    total_applications: int
+    application_share_percent: float
+
