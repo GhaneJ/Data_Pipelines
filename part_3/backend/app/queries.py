@@ -158,3 +158,25 @@ WHERE a.diarienummer = %(diarienummer)s;
     with conn.cursor() as cursor:
         cursor.execute(sql, {"diarienummer": diarienummer})
         return cursor.fetchone()
+
+
+def fetch_stats_by_year(conn: psycopg.Connection[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return simple yearly application statistics from PostgreSQL."""
+    sql = """
+    SELECT
+        a.source_year,
+        COUNT(*)::integer AS total_applications,
+        SUM(CASE WHEN a.decision_code = 'approved' THEN 1 ELSE 0 END)::integer AS approved_applications,
+        SUM(CASE WHEN a.decision_code = 'rejected' THEN 1 ELSE 0 END)::integer AS rejected_applications,
+        SUM(CASE WHEN a.decision_code = 'withdrawn' THEN 1 ELSE 0 END)::integer AS withdrawn_applications,
+        ROUND(
+            SUM(CASE WHEN a.decision_code = 'approved' THEN 1 ELSE 0 END) * 100.0 / COUNT(*),
+            1
+        )::float AS approval_rate_percent
+    FROM applications a
+    GROUP BY a.source_year
+    ORDER BY a.source_year;
+    """
+    with conn.cursor() as cursor:
+        cursor.execute(sql)
+        return cursor.fetchall()

@@ -9,8 +9,13 @@ import psycopg
 from fastapi import Depends, FastAPI, HTTPException, Query, status
 
 from backend.app.database import open_connection
-from backend.app.queries import ApplicationFilters, fetch_application_by_diarienummer, fetch_applications
-from backend.app.schemas import Application, ApplicationList
+from backend.app.queries import (
+    ApplicationFilters,
+    fetch_application_by_diarienummer,
+    fetch_applications,
+    fetch_stats_by_year,
+)
+from backend.app.schemas import Application, ApplicationList, YearStats
 
 
 app = FastAPI(
@@ -91,3 +96,9 @@ def get_application(diarienummer: str, conn: DatabaseConnection) -> dict[str, An
             detail=f"Application {diarienummer!r} was not found.",
         )
     return application
+
+
+@app.get("/stats/by-year", response_model=list[YearStats])
+def get_stats_by_year(conn: DatabaseConnection) -> list[dict[str, Any]]:
+    """Return application counts and approval rate grouped by source year."""
+    return fetch_stats_by_year(conn)

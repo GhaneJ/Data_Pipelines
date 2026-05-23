@@ -51,3 +51,14 @@ class ApplicationList(BaseModel):
     limit: int
     offset: int
     items: list[Application]
+
+
+class YearStats(BaseModel):
+    """Application statistics grouped by source year."""
+
+    source_year: int
+    total_applications: int
+    approved_applications: int
+    rejected_applications: int
+    withdrawn_applications: int
+    approval_rate_percent: float
