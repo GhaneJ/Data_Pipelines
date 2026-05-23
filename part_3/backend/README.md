@@ -280,4 +280,9 @@ The smoke test checks:
 - `/health`,
 - `/applications` with filters and pagination,
 - `/applications/{diarienummer}` using one returned record,
-- `/stats/by-year` year coverage.
+- `/stats/by-year` year coverage,
+- `/stats/by-region`,
+- `/stats/by-education-area`,
+- `/stats/by-decision`,
+- `/providers`,
+- `/providers/{provider_id}/applications`.
