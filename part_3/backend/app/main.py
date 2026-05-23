@@ -13,6 +13,9 @@ from backend.app.queries import (
     ApplicationFilters,
     fetch_application_by_diarienummer,
     fetch_applications,
+    fetch_provider_applications,
+    fetch_provider_by_id,
+    fetch_providers,
     fetch_stats_by_decision,
     fetch_stats_by_education_area,
     fetch_stats_by_region,
@@ -23,6 +26,7 @@ from backend.app.schemas import (
     ApplicationList,
     DecisionStats,
     EducationAreaStats,
+    ProviderList,
     RegionStats,
     YearStats,
 )
@@ -131,3 +135,30 @@ def get_stats_by_decision(conn: DatabaseConnection) -> list[dict[str, Any]]:
     """Return application counts grouped by normalized decision."""
     return fetch_stats_by_decision(conn)
 
+
+@app.get("/providers", response_model=ProviderList)
+def list_providers(
+    conn: DatabaseConnection,
+    q: Annotated[str | None, Query(description="Optional partial provider-name search.")] = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> dict[str, Any]:
+    """List providers with application counts and simple name search."""
+    return fetch_providers(conn, search=q, limit=limit, offset=offset)
+
+
+@app.get("/providers/{provider_id}/applications", response_model=ApplicationList)
+def list_provider_applications(
+    provider_id: int,
+    conn: DatabaseConnection,
+    limit: Annotated[int, Query(ge=1, le=500)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> dict[str, Any]:
+    """List applications for one provider id."""
+    provider = fetch_provider_by_id(conn, provider_id)
+    if provider is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Provider id {provider_id!r} was not found.",
+        )
+    return fetch_provider_applications(conn, provider_id=provider_id, limit=limit, offset=offset)

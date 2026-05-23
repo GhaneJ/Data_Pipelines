@@ -22,7 +22,7 @@ backend/
   requirements.txt
 ```
 
-Sub-project 3.2 created the PostgreSQL database layer. Sub-project 3.3 added the core FastAPI read API on top of the validated database. This package extends the API with richer statistics. Provider browsing is added in the next package.
+Sub-project 3.2 created the PostgreSQL database layer. Sub-project 3.3 added the core FastAPI read API on top of the validated database. Sub-project 3.4 extends the API with richer statistics and provider browsing.
 
 ## Technology choices
 
@@ -217,6 +217,55 @@ curl "http://127.0.0.1:8000/stats/by-decision"
 ```
 
 The response shows how many applications have each normalized decision and each decision's share of the full dataset.
+
+## Provider browsing endpoints
+
+### List providers
+
+```text
+GET /providers
+```
+
+The response contains pagination metadata and an `items` list. Provider URLs use numeric `provider_id` values from the database so the path stays stable and URL-safe.
+
+Supported query parameters:
+
+```text
+q
+limit
+offset
+```
+
+Examples:
+
+```bash
+curl "http://127.0.0.1:8000/providers?limit=10"
+```
+
+```bash
+curl "http://127.0.0.1:8000/providers?q=KYH&limit=5"
+```
+
+### List applications for one provider
+
+```text
+GET /providers/{provider_id}/applications
+```
+
+Supported query parameters:
+
+```text
+limit
+offset
+```
+
+Example:
+
+```bash
+curl "http://127.0.0.1:8000/providers/1/applications?limit=10"
+```
+
+Use `GET /providers` first to find the `provider_id`.
 
 ## Optional local smoke test
 

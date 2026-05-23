@@ -95,3 +95,22 @@ class DecisionStats(BaseModel):
     total_applications: int
     application_share_percent: float
 
+
+class ProviderSummary(BaseModel):
+    """Provider row returned by the provider browsing endpoint."""
+
+    provider_id: int
+    utbildningsanordnare: str
+    total_applications: int
+    approved_applications: int
+    first_year: int | None = None
+    last_year: int | None = None
+
+
+class ProviderList(BaseModel):
+    """Paginated provider list response."""
+
+    total: int
+    limit: int
+    offset: int
+    items: list[ProviderSummary]
