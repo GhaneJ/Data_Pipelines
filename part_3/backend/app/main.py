@@ -13,14 +13,24 @@ from backend.app.queries import (
     ApplicationFilters,
     fetch_application_by_diarienummer,
     fetch_applications,
+    fetch_stats_by_decision,
+    fetch_stats_by_education_area,
+    fetch_stats_by_region,
     fetch_stats_by_year,
 )
-from backend.app.schemas import Application, ApplicationList, YearStats
+from backend.app.schemas import (
+    Application,
+    ApplicationList,
+    DecisionStats,
+    EducationAreaStats,
+    RegionStats,
+    YearStats,
+)
 
 
 app = FastAPI(
     title="MYH Applications API",
-    version="0.3.3",
+    version="0.3.4",
     description="Read API for the curated MYH applications dataset stored in PostgreSQL.",
 )
 
@@ -102,3 +112,22 @@ def get_application(diarienummer: str, conn: DatabaseConnection) -> dict[str, An
 def get_stats_by_year(conn: DatabaseConnection) -> list[dict[str, Any]]:
     """Return application counts and approval rate grouped by source year."""
     return fetch_stats_by_year(conn)
+
+
+@app.get("/stats/by-region", response_model=list[RegionStats])
+def get_stats_by_region(conn: DatabaseConnection) -> list[dict[str, Any]]:
+    """Return application counts and approval rate grouped by län/region."""
+    return fetch_stats_by_region(conn)
+
+
+@app.get("/stats/by-education-area", response_model=list[EducationAreaStats])
+def get_stats_by_education_area(conn: DatabaseConnection) -> list[dict[str, Any]]:
+    """Return application counts and approval rate grouped by education area."""
+    return fetch_stats_by_education_area(conn)
+
+
+@app.get("/stats/by-decision", response_model=list[DecisionStats])
+def get_stats_by_decision(conn: DatabaseConnection) -> list[dict[str, Any]]:
+    """Return application counts grouped by normalized decision."""
+    return fetch_stats_by_decision(conn)
+

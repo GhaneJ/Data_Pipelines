@@ -22,7 +22,7 @@ backend/
   requirements.txt
 ```
 
-Sub-project 3.2 created the PostgreSQL database layer. Sub-project 3.3 adds the core FastAPI read API on top of the validated database.
+Sub-project 3.2 created the PostgreSQL database layer. Sub-project 3.3 added the core FastAPI read API on top of the validated database. This package extends the API with richer statistics. Provider browsing is added in the next package.
 
 ## Technology choices
 
@@ -38,19 +38,9 @@ No ORM is used.
 
 ## Install dependencies
 
-From `part_3`:
+From `part_3`, use the Python environment you normally run this project with:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r backend/requirements.txt
-```
-
-On Windows PowerShell:
-
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
 pip install -r backend/requirements.txt
 ```
 
@@ -185,6 +175,48 @@ curl "http://127.0.0.1:8000/stats/by-year"
 ```
 
 The response includes total applications, decision counts, and approval rate per source year.
+
+### Regional statistics
+
+```text
+GET /stats/by-region
+```
+
+Example:
+
+```bash
+curl "http://127.0.0.1:8000/stats/by-region"
+```
+
+The response groups applications by `lan` and includes total applications, decision counts, and approval rate.
+
+### Education-area statistics
+
+```text
+GET /stats/by-education-area
+```
+
+Example:
+
+```bash
+curl "http://127.0.0.1:8000/stats/by-education-area"
+```
+
+The response groups applications by `utbildningsomrade` and includes total applications, decision counts, and approval rate.
+
+### Decision statistics
+
+```text
+GET /stats/by-decision
+```
+
+Example:
+
+```bash
+curl "http://127.0.0.1:8000/stats/by-decision"
+```
+
+The response shows how many applications have each normalized decision and each decision's share of the full dataset.
 
 ## Optional local smoke test
 
