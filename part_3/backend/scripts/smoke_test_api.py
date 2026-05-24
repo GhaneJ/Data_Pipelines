@@ -12,7 +12,7 @@ import io
 import json
 from typing import Any
 from urllib.parse import quote, urlencode
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 
 EXPECTED_YEARS = {2020, 2021, 2022, 2023, 2024, 2025}
@@ -22,6 +22,13 @@ EXPECTED_DECISIONS = {"approved", "rejected", "withdrawn"}
 def get_json(url: str) -> Any:
     """Fetch one API URL and parse the JSON response."""
     with urlopen(url, timeout=10) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def post_json(url: str) -> Any:
+    """Send one POST request and parse the JSON response."""
+    request = Request(url, method="POST")
+    with urlopen(request, timeout=30) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -70,6 +77,16 @@ def main() -> None:
     health = get_json(f"{base_url}/health")
     if health.get("status") != "ok":
         raise SystemExit(f"Unexpected health response: {health}")
+
+    refresh = post_json(f"{base_url}/refresh")
+    if refresh.get("status") != "success":
+        raise SystemExit(f"Unexpected refresh response: {refresh}")
+    if refresh.get("rows_loaded", 0) <= 0:
+        raise SystemExit(f"Refresh did not report loaded rows: {refresh}")
+    if "myh_curated_applications_2020_2025.csv" not in refresh.get("source_file", ""):
+        raise SystemExit(f"Refresh response did not identify the curated CSV: {refresh}")
+    if not refresh.get("refreshed_at"):
+        raise SystemExit(f"Refresh response did not include refreshed_at: {refresh}")
 
     params = urlencode({"source_year": 2024, "decision": "approved", "limit": 3})
     applications = get_json(f"{base_url}/applications?{params}")
