@@ -140,3 +140,12 @@ class ProviderList(BaseModel):
     limit: int
     offset: int
     items: list[ProviderSummary]
+
+
+class RefreshResult(BaseModel):
+    """Summary returned after reloading the database from the curated CSV."""
+
+    status: str
+    rows_loaded: int
+    source_file: str
+    refreshed_at: str

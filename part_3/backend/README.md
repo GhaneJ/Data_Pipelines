@@ -22,7 +22,7 @@ backend/
   requirements.txt
 ```
 
-Sub-project 3.2 created the PostgreSQL database layer. Sub-project 3.3 added the core FastAPI read API. Sub-project 3.4 added richer statistics and provider browsing. Sub-project 3.5 added filtered CSV export. Sub-project 3.6 adds trend statistics over `source_year` for analysis and later dashboard or presentation work.
+Sub-project 3.2 created the PostgreSQL database layer. Sub-project 3.3 added the core FastAPI read API. Sub-project 3.4 added richer statistics and provider browsing. Sub-project 3.5 added filtered CSV export. Sub-project 3.6 added trend statistics over `source_year` for analysis and later dashboard or presentation work. Sub-project 3.7 adds a simple operational refresh endpoint that reloads PostgreSQL from the existing curated CSV.
 
 ## Technology choices
 
@@ -70,7 +70,7 @@ From `part_3`:
 python backend/scripts/load_curated_data.py --csv-path ../path/to/myh_curated_applications_2020_2025.csv
 ```
 
-By default, the loader runs `schema.sql` and `indexes.sql` first. That recreates the tables, then loads the lookup rows and application rows.
+By default, the loader runs `schema.sql` and `indexes.sql` first. That recreates the tables, then loads the lookup rows and application rows. The API refresh endpoint uses the same loading helper.
 
 ## Validate the database
 
@@ -408,6 +408,57 @@ curl -OJ "http://127.0.0.1:8000/export/applications?provider_id=1"
 curl -OJ "http://127.0.0.1:8000/export/applications?year=2025&region=Stockholm&limit=100"
 ```
 
+## Operational refresh endpoint
+
+### Reload the database from the curated CSV
+
+```text
+POST /refresh
+```
+
+This endpoint reloads the PostgreSQL tables from the existing curated applications CSV. It is meant as a small internal operational endpoint, not as a full ingestion platform.
+
+What it does:
+
+- finds the curated CSV in one of the project loading locations,
+- validates that the required curated columns exist,
+- validates the expected application grain and year/decision assumptions,
+- recreates the current PostgreSQL schema,
+- reloads lookup tables and the central `applications` table,
+- returns a short JSON summary.
+
+What it does not do:
+
+- it does not fetch new MYH files,
+- it does not rerun the Part 2 notebook or raw Excel harmonization,
+- it does not run in the background,
+- it does not add authentication or scheduling.
+
+The curated CSV should be available in one of the same default locations used by the loader, for example:
+
+```text
+part_2/data/processed/myh_curated_applications_2020_2025.csv
+part_3/data/processed/myh_curated_applications_2020_2025.csv
+part_3/myh_curated_applications_2020_2025.csv
+```
+
+Example request:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/refresh"
+```
+
+Example response shape:
+
+```json
+{
+  "status": "success",
+  "rows_loaded": 7641,
+  "source_file": "part_2/data/processed/myh_curated_applications_2020_2025.csv",
+  "refreshed_at": "2026-05-24T14:30:00+00:00"
+}
+```
+
 ## Optional local smoke test
 
 Start the API first, then run:
@@ -419,6 +470,7 @@ python backend/scripts/smoke_test_api.py
 The smoke test checks:
 
 - `/health`,
+- `POST /refresh` and the basic refresh JSON shape,
 - `/applications` with filters and pagination,
 - `/applications/{diarienummer}` using one returned record,
 - `/stats/by-year` year coverage,
@@ -435,4 +487,4 @@ The smoke test checks:
 
 ## Current boundary
 
-The backend is still read-oriented. It does not include authentication, frontend code, or operational refresh/ingestion endpoints yet. Operational refresh belongs after the trend-statistics API is stable.
+The backend remains mostly read-oriented, with one controlled operational endpoint for reloading the database from the existing curated CSV. It still does not include authentication, frontend code, background workers, schedulers, or a separate raw-source ingestion endpoint.
