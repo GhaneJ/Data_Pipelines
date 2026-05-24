@@ -22,7 +22,7 @@ backend/
   requirements.txt
 ```
 
-Sub-project 3.2 created the PostgreSQL database layer. Sub-project 3.3 added the core FastAPI read API. Sub-project 3.4 added richer statistics and provider browsing. Sub-project 3.5 adds filtered CSV export for API consumers who need downloadable data.
+Sub-project 3.2 created the PostgreSQL database layer. Sub-project 3.3 added the core FastAPI read API. Sub-project 3.4 added richer statistics and provider browsing. Sub-project 3.5 added filtered CSV export. Sub-project 3.6 adds trend statistics over `source_year` for analysis and later dashboard or presentation work.
 
 ## Technology choices
 
@@ -220,6 +220,96 @@ curl "http://127.0.0.1:8000/stats/by-decision"
 
 The response shows how many applications have each normalized decision and each decision's share of the full dataset.
 
+## Trend statistics endpoints
+
+Trend endpoints show how application counts develop over `source_year`. They are useful for analysis, presentation, and later dashboard charts because the API consumer does not need to group the raw records manually.
+
+### Decision trends
+
+```text
+GET /stats/trends/by-decision
+```
+
+Supported query parameters:
+
+```text
+year_from
+year_to
+decision
+```
+
+Example:
+
+```bash
+curl "http://127.0.0.1:8000/stats/trends/by-decision?year_from=2022&year_to=2025"
+```
+
+Example with a normalized decision filter:
+
+```bash
+curl "http://127.0.0.1:8000/stats/trends/by-decision?decision=approved"
+```
+
+Rows include `source_year`, `decision_code`, `decision_label`, and `application_count`.
+
+### Regional trends
+
+```text
+GET /stats/trends/by-region
+```
+
+Supported query parameters:
+
+```text
+year_from
+year_to
+region or lan
+limit
+```
+
+`limit` selects the top regions by total applications within the selected range, then returns their yearly counts.
+
+Examples:
+
+```bash
+curl "http://127.0.0.1:8000/stats/trends/by-region?year_from=2023&year_to=2025&limit=5"
+```
+
+```bash
+curl "http://127.0.0.1:8000/stats/trends/by-region?region=Stockholm"
+```
+
+Rows include `source_year`, `lan`, and `application_count`.
+
+### Education-area trends
+
+```text
+GET /stats/trends/by-education-area
+```
+
+Supported query parameters:
+
+```text
+year_from
+year_to
+education_area
+limit
+```
+
+`limit` selects the top education areas by total applications within the selected range, then returns their yearly counts.
+
+Examples:
+
+```bash
+curl "http://127.0.0.1:8000/stats/trends/by-education-area?year_from=2023&year_to=2025&limit=5"
+```
+
+```bash
+curl "http://127.0.0.1:8000/stats/trends/by-education-area?education_area=Data%2FIT"
+```
+
+Rows include `source_year`, `education_area_id`, `utbildningsomrade`, and `application_count`.
+
 ## Provider browsing endpoints
 
 ### List providers
@@ -335,6 +425,9 @@ The smoke test checks:
 - `/stats/by-region`,
 - `/stats/by-education-area`,
 - `/stats/by-decision`,
+- `/stats/trends/by-decision`,
+- `/stats/trends/by-region`,
+- `/stats/trends/by-education-area`,
 - `/providers`,
 - `/providers/{provider_id}/applications`,
 - `/export/applications` as a downloadable CSV,
@@ -342,4 +435,4 @@ The smoke test checks:
 
 ## Current boundary
 
-The backend is still read-oriented. It does not include authentication, frontend code, trend-statistics endpoints, or operational refresh/ingestion endpoints yet. Those belong in later staged sub-projects after the filtered export API is stable.
+The backend is still read-oriented. It does not include authentication, frontend code, or operational refresh/ingestion endpoints yet. Operational refresh belongs after the trend-statistics API is stable.
