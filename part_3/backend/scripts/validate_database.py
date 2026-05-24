@@ -1,7 +1,7 @@
 """Validate that PostgreSQL matches the curated MYH applications CSV.
 
-Run this after load_curated_data.py. The checks focus on the 3.2 promise that
-PostgreSQL preserves the curated dataset and is ready for the later read API.
+Run this after load_curated_data.py. The checks confirm that PostgreSQL
+preserves the curated dataset and is ready for the FastAPI backend.
 """
 
 from __future__ import annotations
