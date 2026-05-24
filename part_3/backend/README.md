@@ -22,7 +22,7 @@ backend/
   requirements.txt
 ```
 
-Sub-project 3.2 created the PostgreSQL database layer. Sub-project 3.3 added the core FastAPI read API on top of the validated database. Sub-project 3.4 extends the API with richer statistics and provider browsing.
+Sub-project 3.2 created the PostgreSQL database layer. Sub-project 3.3 added the core FastAPI read API. Sub-project 3.4 added richer statistics and provider browsing. Sub-project 3.5 adds filtered CSV export for API consumers who need downloadable data.
 
 ## Technology choices
 
@@ -32,7 +32,7 @@ The backend uses:
 - psycopg 3 for PostgreSQL access,
 - FastAPI for the read API,
 - raw SQL for queries,
-- Pydantic/FastAPI response models where they make the API easier to understand.
+- Pydantic/FastAPI response models where they make JSON responses easier to understand.
 
 No ORM is used.
 
@@ -162,6 +162,8 @@ Example with URL encoding for the space and slash in `diarienummer`:
 curl "http://127.0.0.1:8000/applications/MYH%202020%2F4419"
 ```
 
+## Statistics endpoints
+
 ### Yearly statistics
 
 ```text
@@ -267,6 +269,55 @@ curl "http://127.0.0.1:8000/providers/1/applications?limit=10"
 
 Use `GET /providers` first to find the `provider_id`.
 
+## Export endpoint
+
+### Export filtered applications as CSV
+
+```text
+GET /export/applications
+```
+
+This endpoint returns a downloadable CSV file named `myh_applications_export.csv`.
+
+Export endpoints are useful because another system, analyst, or dashboard team may need a filtered dataset instead of browsing records one page at a time. This keeps the API useful as a small internal data service, not only as a demo of JSON endpoints.
+
+Supported query parameters:
+
+```text
+year
+source_year
+decision
+region or lan
+municipality or kommun
+education_area
+provider
+provider_id
+study_form
+limit
+```
+
+`year` is the preferred user-facing filter and maps to the database field `source_year`. `source_year` is also accepted as a clear alias. If both are used, they must have the same value.
+
+`provider` is a partial text filter for provider names. `provider_id` is an exact numeric filter and matches the stable provider IDs returned by `GET /providers`.
+
+Examples:
+
+```bash
+curl -OJ "http://127.0.0.1:8000/export/applications?year=2024&decision=approved"
+```
+
+```bash
+curl -OJ "http://127.0.0.1:8000/export/applications?provider=KYH"
+```
+
+```bash
+curl -OJ "http://127.0.0.1:8000/export/applications?provider_id=1"
+```
+
+```bash
+curl -OJ "http://127.0.0.1:8000/export/applications?year=2025&region=Stockholm&limit=100"
+```
+
 ## Optional local smoke test
 
 Start the API first, then run:
@@ -285,4 +336,10 @@ The smoke test checks:
 - `/stats/by-education-area`,
 - `/stats/by-decision`,
 - `/providers`,
-- `/providers/{provider_id}/applications`.
+- `/providers/{provider_id}/applications`,
+- `/export/applications` as a downloadable CSV,
+- `/export/applications?year=2024&decision=approved` as an assignment-style filtered CSV export.
+
+## Current boundary
+
+The backend is still read-oriented. It does not include authentication, frontend code, trend-statistics endpoints, or operational refresh/ingestion endpoints yet. Those belong in later staged sub-projects after the filtered export API is stable.

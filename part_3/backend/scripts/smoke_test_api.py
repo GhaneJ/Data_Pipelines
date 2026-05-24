@@ -7,6 +7,8 @@ keeps the local verification workflow simple.
 from __future__ import annotations
 
 import argparse
+import csv
+import io
 import json
 from typing import Any
 from urllib.parse import quote, urlencode
@@ -21,6 +23,21 @@ def get_json(url: str) -> Any:
     """Fetch one API URL and parse the JSON response."""
     with urlopen(url, timeout=10) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+def get_csv_rows(url: str) -> list[dict[str, str]]:
+    """Fetch one CSV export URL and return parsed rows."""
+    with urlopen(url, timeout=10) as response:
+        content_type = response.headers.get("Content-Type", "")
+        content_disposition = response.headers.get("Content-Disposition", "")
+        csv_text = response.read().decode("utf-8")
+
+    if "text/csv" not in content_type:
+        raise SystemExit(f"Expected CSV content type from {url}, got {content_type!r}.")
+    if "attachment" not in content_disposition:
+        raise SystemExit(f"Expected downloadable attachment response from {url}.")
+
+    return list(csv.DictReader(io.StringIO(csv_text)))
 
 
 def require_items(response: dict[str, Any], endpoint: str) -> list[dict[str, Any]]:
@@ -75,6 +92,18 @@ def main() -> None:
     provider_id = provider_items[0]["provider_id"]
     provider_applications = get_json(f"{base_url}/providers/{provider_id}/applications?limit=3")
     require_items(provider_applications, f"/providers/{provider_id}/applications")
+
+    export_rows = get_csv_rows(f"{base_url}/export/applications?{urlencode({'limit': 5})}")
+    if not export_rows or "diarienummer" not in export_rows[0]:
+        raise SystemExit("Expected CSV rows with diarienummer from /export/applications.")
+
+    export_params = urlencode({"year": 2024, "decision": "approved", "limit": 5})
+    filtered_export_rows = get_csv_rows(f"{base_url}/export/applications?{export_params}")
+    if not filtered_export_rows:
+        raise SystemExit("Expected filtered CSV rows from /export/applications.")
+    for row in filtered_export_rows:
+        if row.get("source_year") != "2024" or row.get("beslut_normalized") != "approved":
+            raise SystemExit("Filtered CSV export returned a row outside year=2024 and decision=approved.")
 
     print("API smoke test completed successfully.")
 
