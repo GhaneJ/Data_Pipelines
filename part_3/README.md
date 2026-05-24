@@ -43,7 +43,7 @@ Principles:
 - Keep commits focused on coherent project changes.
 - Keep internal handoff/control files outside Git tracking.
 
-## Current backend shape after Sub-project 3.6
+## Current backend shape after Sub-project 3.7
 
 The backend is intentionally compact:
 
@@ -118,9 +118,9 @@ locations(lan, kommun)
 
 The first goal is understandable query performance, not advanced database optimization.
 
-## Implemented API after Sub-project 3.6
+## Implemented API after Sub-project 3.7
 
-The API reads from PostgreSQL and returns JSON browsing, statistics, trend-statistics, provider-browsing, and CSV export responses.
+The API reads from PostgreSQL and returns JSON browsing, statistics, trend-statistics, provider-browsing, CSV export responses, and one controlled operational refresh response.
 
 Implemented endpoints:
 
@@ -138,6 +138,7 @@ GET /stats/trends/by-education-area
 GET /providers
 GET /providers/{provider_id}/applications
 GET /export/applications
+POST /refresh
 ```
 
 `GET /applications` supports useful filters and pagination:
@@ -166,6 +167,8 @@ GET /export/applications?provider=...
 GET /export/applications?provider_id=...
 ```
 
+`POST /refresh` reloads PostgreSQL from the existing curated CSV. It validates the expected columns and dataset assumptions, recreates the current schema, reloads lookup tables and applications, and returns a short JSON summary. It does not fetch new MYH files or rerun the full Part 2 transformation pipeline.
+
 Recommended pagination defaults:
 
 ```text
@@ -176,23 +179,16 @@ max_limit=500
 
 ## Later staged direction
 
-The project remains open for further ambition after the trend-statistics API:
+The project remains open for further ambition after the operational refresh API:
 
 ```text
-3.7 Operational Refresh / Ingestion Workflow
-3.8 Frontend Foundation
-3.9 Dashboard and Browsing Interface
-3.10 Optional Authorization Layer
-3.11 Final Validation, Demo Flow, and Submission Readiness
+3.8 Final validation and demo/dashboard readiness
+3.9 Optional dashboard or frontend layer
+3.10 Optional authorization or write-side polish, only if useful
+3.11 Final submission cleanup and presentation flow
 ```
 
-Operational endpoints belong after the export API and trend statistics are stable. The likely first operational endpoint is:
-
-```text
-POST /refresh
-```
-
-`POST /ingestion/run` should only be added if it has a distinct purpose from refresh, such as rebuilding from source inputs instead of reloading the existing curated dataset.
+`POST /refresh` is now the clear operational endpoint for reloading PostgreSQL from the existing curated dataset. `POST /ingestion/run` should only be added later if it has a distinct purpose, such as rebuilding from source inputs instead of reloading the existing curated CSV.
 
 ## Authentication and authorization boundary
 
@@ -202,7 +198,7 @@ An authorization layer may be considered later as an optional ambition step, but
 
 ## Frontend direction
 
-A frontend should be added only after the backend API is stable enough to consume.
+A frontend or dashboard should be added only if it helps the final presentation or demonstrates API consumption clearly.
 
 Planned frontend direction:
 
