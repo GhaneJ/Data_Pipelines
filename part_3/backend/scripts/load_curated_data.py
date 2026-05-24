@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import csv
 import os
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -435,25 +436,74 @@ def load_applications(conn: psycopg.Connection[Any], rows: list[dict[str, str]])
         cursor.executemany(APPLICATION_INSERT_SQL, application_rows)
 
 
+
+def format_source_path(csv_path: Path) -> str:
+    """Return a readable source path for API and CLI summaries."""
+    resolved = csv_path.resolve()
+    for base_path in (REPO_ROOT, Path.cwd()):
+        try:
+            return resolved.relative_to(base_path.resolve()).as_posix()
+        except ValueError:
+            continue
+    return resolved.as_posix()
+
+
+def refresh_applications_database(
+    csv_path: Path | None = None,
+    database_url: str | None = None,
+    schema_path: Path = DEFAULT_SCHEMA_PATH,
+    indexes_path: Path = DEFAULT_INDEXES_PATH,
+) -> dict[str, str | int]:
+    """Reload PostgreSQL from the curated CSV and return a small summary."""
+    database_url = database_url or os.getenv("DATABASE_URL")
+    if not database_url:
+        raise ValueError("A PostgreSQL connection URL is required. Set DATABASE_URL before refreshing.")
+
+    resolved_csv_path = resolve_csv_path(csv_path)
+    rows = read_rows(resolved_csv_path)
+    validate_source_rows(rows)
+
+    with psycopg.connect(database_url) as conn:
+        run_sql_file(conn, schema_path)
+        run_sql_file(conn, indexes_path)
+        insert_lookup_rows(conn, rows)
+        load_applications(conn, rows)
+
+    return {
+        "status": "success",
+        "rows_loaded": len(rows),
+        "source_file": format_source_path(resolved_csv_path),
+        "refreshed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+
 def main() -> None:
     """Run schema creation, lookup loading, and application loading."""
     args = parse_args()
     if not args.database_url:
         raise ValueError("A PostgreSQL connection URL is required. Set DATABASE_URL or use --database-url.")
 
-    csv_path = resolve_csv_path(args.csv_path)
-    rows = read_rows(csv_path)
-    validate_source_rows(rows)
+    if args.skip_schema:
+        csv_path = resolve_csv_path(args.csv_path)
+        rows = read_rows(csv_path)
+        validate_source_rows(rows)
 
-    with psycopg.connect(args.database_url) as conn:
-        if not args.skip_schema:
-            run_sql_file(conn, args.schema_path)
-            run_sql_file(conn, args.indexes_path)
+        with psycopg.connect(args.database_url) as conn:
+            insert_lookup_rows(conn, rows)
+            load_applications(conn, rows)
 
-        insert_lookup_rows(conn, rows)
-        load_applications(conn, rows)
+        print(f"Loaded {len(rows)} applications from {csv_path} into PostgreSQL.")
+        return
 
-    print(f"Loaded {len(rows)} applications from {csv_path} into PostgreSQL.")
+    summary = refresh_applications_database(
+        csv_path=args.csv_path,
+        database_url=args.database_url,
+        schema_path=args.schema_path,
+        indexes_path=args.indexes_path,
+    )
+    print(
+        f"Loaded {summary['rows_loaded']} applications from "
+        f"{summary['source_file']} into PostgreSQL."
+    )
 
 
 if __name__ == "__main__":
