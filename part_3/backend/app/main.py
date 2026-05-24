@@ -12,6 +12,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.responses import Response
 
 from backend.app.database import open_connection
+from backend.scripts.load_curated_data import refresh_applications_database
 from backend.app.queries import (
     EXPORT_APPLICATION_COLUMNS,
     ApplicationFilters,
@@ -38,6 +39,7 @@ from backend.app.schemas import (
     EducationAreaStats,
     EducationAreaTrend,
     ProviderList,
+    RefreshResult,
     RegionStats,
     RegionTrend,
     YearStats,
@@ -46,8 +48,8 @@ from backend.app.schemas import (
 
 app = FastAPI(
     title="MYH Applications API",
-    version="0.3.6",
-    description="Read API for the curated MYH applications dataset stored in PostgreSQL.",
+    version="0.3.7",
+    description="Read and operational API for the curated MYH applications dataset stored in PostgreSQL.",
 )
 
 
@@ -110,6 +112,27 @@ def read_root() -> dict[str, str]:
 def read_health() -> dict[str, str]:
     """Return a simple health check response."""
     return {"status": "ok"}
+
+
+@app.post("/refresh", response_model=RefreshResult)
+def refresh_applications() -> dict[str, Any]:
+    """Reload PostgreSQL from the existing curated applications CSV."""
+    try:
+        return refresh_applications_database()
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except psycopg.OperationalError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Could not connect to the PostgreSQL database during refresh.",
+        ) from exc
+    except psycopg.Error as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database refresh failed while loading the curated CSV.",
+        ) from exc
 
 
 @app.get("/applications", response_model=ApplicationList)
