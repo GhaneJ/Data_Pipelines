@@ -48,7 +48,7 @@ from backend.app.schemas import (
 
 app = FastAPI(
     title="MYH Applications API",
-    version="0.3.7",
+    version="0.3.8",
     description="Read and operational API for the curated MYH applications dataset stored in PostgreSQL.",
 )
 

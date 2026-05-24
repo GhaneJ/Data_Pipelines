@@ -1,7 +1,7 @@
-"""Small smoke test for the local FastAPI read API.
+"""Small smoke test for the local MYH Applications API.
 
-Run this after starting uvicorn. It uses only the Python standard library so it
-keeps the local verification workflow simple.
+Run this after starting uvicorn. It uses only the Python standard library so the
+local verification workflow stays simple and easy to explain.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ import csv
 import io
 import json
 from typing import Any
+from urllib.error import HTTPError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
@@ -47,6 +48,19 @@ def get_csv_rows(url: str) -> list[dict[str, str]]:
     return list(csv.DictReader(io.StringIO(csv_text)))
 
 
+def require_http_error(url: str, expected_status: int) -> None:
+    """Confirm that a guardrail URL returns the expected HTTP error status."""
+    try:
+        with urlopen(url, timeout=10):
+            pass
+    except HTTPError as error:
+        if error.code != expected_status:
+            raise SystemExit(f"Expected HTTP {expected_status} from {url}, got HTTP {error.code}.") from error
+        return
+
+    raise SystemExit(f"Expected HTTP {expected_status} from {url}, but the request succeeded.")
+
+
 def require_items(response: dict[str, Any], endpoint: str) -> list[dict[str, Any]]:
     """Return paginated items or stop with a useful smoke-test error."""
     items = response.get("items", [])
@@ -68,11 +82,15 @@ def require_trend_rows(rows: Any, endpoint: str, expected_fields: set[str]) -> l
 
 
 def main() -> None:
-    """Run read-only checks against the local API."""
+    """Run local API checks that cover the final Part 3 demo path."""
     parser = argparse.ArgumentParser(description="Smoke test the local MYH Applications API.")
     parser.add_argument("--base-url", default="http://127.0.0.1:8000", help="Base URL for the API.")
     args = parser.parse_args()
     base_url = args.base_url.rstrip("/")
+
+    root = get_json(f"{base_url}/")
+    if root.get("service") != "MYH Applications API" or root.get("status") != "ok":
+        raise SystemExit(f"Unexpected root response: {root}")
 
     health = get_json(f"{base_url}/health")
     if health.get("status") != "ok":
@@ -156,6 +174,10 @@ def main() -> None:
     for row in filtered_export_rows:
         if row.get("source_year") != "2024" or row.get("beslut_normalized") != "approved":
             raise SystemExit("Filtered CSV export returned a row outside year=2024 and decision=approved.")
+
+    require_http_error(f"{base_url}/export/applications?year=2024&source_year=2025", 400)
+    require_http_error(f"{base_url}/stats/trends/by-decision?year_from=2025&year_to=2024", 400)
+    require_http_error(f"{base_url}/providers/999999/applications", 404)
 
     print("API smoke test completed successfully.")
 

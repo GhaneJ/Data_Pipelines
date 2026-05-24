@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Part 3 turns the curated Part 2 dataset into a small data service.
+Part 3 turns the curated Part 2 MYH applications dataset into a small internal data service.
 
-The goal is to show that the cleaned MYH application data can be stored in PostgreSQL, queried through SQL, and consumed through a FastAPI API. The solution should stay practical, readable, and explainable while still supporting a strong final project direction.
+The project shows the full path from a trusted curated CSV to PostgreSQL storage and a FastAPI API that another system, analyst, or presentation layer can consume. The implementation stays practical and explainable: PostgreSQL, FastAPI, psycopg 3, raw SQL, and a compact backend structure.
 
 ## Source of truth
 
-The curated CSV from Part 2 is the data source used for the Part 3 database load:
+The curated CSV from Part 2 is the loading source for the Part 3 database:
 
 ```text
 myh_curated_applications_2020_2025.csv
@@ -23,13 +23,9 @@ Main record identifier: diarienummer
 Main grain: one application record per diarienummer
 ```
 
-The raw Excel files are not required for the first Part 3 backend steps because the curated CSV is already the finished Part 2 output.
+The raw Excel files are not loaded directly by the Part 3 API. They belong to the Part 2 transformation journey. Part 3 operationalizes the finished curated dataset.
 
 ## Implementation principles
-
-The project should be built gradually and only add structure when it is needed.
-
-Principles:
 
 - Keep the implementation direct and easy to explain.
 - Use PostgreSQL as the database.
@@ -37,15 +33,14 @@ Principles:
 - Use psycopg 3 for PostgreSQL access.
 - Use raw SQL for database queries.
 - Do not use an ORM.
-- Use comments where they help explain project-specific logic.
-- Prefer readable SQL and Python over generic abstractions.
-- Add folders and modules only when the current implementation step needs them.
+- Keep comments and docstrings concise and useful.
+- Add structure only when it solves a real project need.
 - Keep commits focused on coherent project changes.
 - Keep internal handoff/control files outside Git tracking.
 
-## Current backend shape after Sub-project 3.7
+## Current backend shape after Sub-project 3.8
 
-The backend is intentionally compact:
+The backend remains intentionally compact:
 
 ```text
 part_3/
@@ -61,6 +56,7 @@ part_3/
       queries.py
       schemas.py
     scripts/
+      demo_api.py
       load_curated_data.py
       smoke_test_api.py
       validate_database.py
@@ -69,7 +65,7 @@ part_3/
       indexes.sql
 ```
 
-This structure is enough for the current SQL + API layer. Routers, frontend folders, authentication modules, or other extra architecture should only be added later when they solve a real project need.
+This is enough for the current SQL + API layer. Routers, service layers, frontend folders, authentication modules, background workers, or schedulers should only be added later if they clearly improve the final project.
 
 ## Database shape
 
@@ -89,7 +85,7 @@ study_forms
 
 The `applications` table remains the central table. Repeated high-value fields such as provider, education area, location, decision, principal type, and study form are represented through lookup tables.
 
-The schema preserves traceability fields from the curated dataset, including:
+Traceability fields from the curated dataset are preserved, including:
 
 ```text
 source_year
@@ -99,45 +95,36 @@ source_row
 diarienummer
 ```
 
-## Indexing plan
+## API story
 
-Use simple indexes that support common filters and lookups:
+The API reads from PostgreSQL and provides:
 
-```text
-applications(diarienummer)
-applications(source_year)
-applications(decision_code)
-applications(provider_id)
-applications(education_area_id)
-applications(location_id)
-applications(study_form_id)
-applications(source_year, decision_code)
-providers(utbildningsanordnare)
-locations(lan, kommun)
-```
-
-The first goal is understandable query performance, not advanced database optimization.
-
-## Implemented API after Sub-project 3.7
-
-The API reads from PostgreSQL and returns JSON browsing, statistics, trend-statistics, provider-browsing, CSV export responses, and one controlled operational refresh response.
+- service health/status checks,
+- record access,
+- filtered and paginated browsing,
+- grouped statistics,
+- provider browsing,
+- filtered CSV export,
+- trend statistics over `source_year`,
+- one controlled operational refresh endpoint.
 
 Implemented endpoints:
 
 ```text
-GET /health
-GET /applications
-GET /applications/{diarienummer}
-GET /stats/by-year
-GET /stats/by-region
-GET /stats/by-education-area
-GET /stats/by-decision
-GET /stats/trends/by-decision
-GET /stats/trends/by-region
-GET /stats/trends/by-education-area
-GET /providers
-GET /providers/{provider_id}/applications
-GET /export/applications
+GET  /
+GET  /health
+GET  /applications
+GET  /applications/{diarienummer}
+GET  /stats/by-year
+GET  /stats/by-region
+GET  /stats/by-education-area
+GET  /stats/by-decision
+GET  /stats/trends/by-decision
+GET  /stats/trends/by-region
+GET  /stats/trends/by-education-area
+GET  /providers
+GET  /providers/{provider_id}/applications
+GET  /export/applications
 POST /refresh
 ```
 
@@ -155,19 +142,19 @@ limit
 offset
 ```
 
-The trend endpoints support simple year-range filters through `year_from` and `year_to`. Decision trends can be filtered by normalized `decision`; region trends can be filtered by `region` or `lan`; education-area trends can be filtered by `education_area`. Region and education-area trends also support an optional `limit` for top groups.
+`GET /providers` supports `q`, `limit`, and `offset`. Provider detail paths use numeric `provider_id` values because provider names can contain spaces, punctuation, Swedish characters, and organization suffixes.
 
-Provider browsing uses numeric `provider_id` values in path parameters. Provider names are still useful as query parameters, but they should not be used as path parameters because names may contain spaces, punctuation, Swedish characters, or organization suffixes.
-
-`GET /export/applications` supports filtered CSV downloads with assignment-style examples such as:
+`GET /export/applications` supports filtered CSV downloads with assignment-style examples:
 
 ```text
 GET /export/applications?year=2024&decision=approved
-GET /export/applications?provider=...
-GET /export/applications?provider_id=...
+GET /export/applications?provider=KYH
+GET /export/applications?provider_id=1
 ```
 
-`POST /refresh` reloads PostgreSQL from the existing curated CSV. It validates the expected columns and dataset assumptions, recreates the current schema, reloads lookup tables and applications, and returns a short JSON summary. It does not fetch new MYH files or rerun the full Part 2 transformation pipeline.
+Trend endpoints support `year_from` and `year_to`. Decision trends can be filtered by `decision`, region trends by `region` or `lan`, and education-area trends by `education_area`. Region and education-area trends also support `limit` to return top groups for presentation or charting.
+
+`POST /refresh` reloads PostgreSQL from the existing curated CSV. It validates required columns and expected dataset assumptions, recreates the current schema, reloads lookup tables and applications, and returns a short JSON summary. It does not fetch new MYH files or rerun the full Part 2 notebook pipeline.
 
 Recommended pagination defaults:
 
@@ -177,51 +164,85 @@ offset=0
 max_limit=500
 ```
 
-## Later staged direction
+## Local validation flow
 
-The project remains open for further ambition after the operational refresh API:
+From `part_3`, install dependencies once in your normal Python environment:
 
-```text
-3.8 Final validation and demo/dashboard readiness
-3.9 Optional dashboard or frontend layer
-3.10 Optional authorization or write-side polish, only if useful
-3.11 Final submission cleanup and presentation flow
+```bash
+pip install -r backend/requirements.txt
 ```
 
-`POST /refresh` is now the clear operational endpoint for reloading PostgreSQL from the existing curated dataset. `POST /ingestion/run` should only be added later if it has a distinct purpose, such as rebuilding from source inputs instead of reloading the existing curated CSV.
+Set `DATABASE_URL`.
 
-## Authentication and authorization boundary
+Windows PowerShell:
 
-Authentication and role-based authorization are not required by the assignment and are not part of the current backend implementation.
-
-An authorization layer may be considered later as an optional ambition step, but it should stay separate from the core SQL/API work and should not weaken the explainability of the main data-service journey.
-
-## Frontend direction
-
-A frontend or dashboard should be added only if it helps the final presentation or demonstrates API consumption clearly.
-
-Planned frontend direction:
-
-```text
-Applications table
-Application detail page
-Statistics dashboard
-Providers page
-Export controls
+```powershell
+$env:DATABASE_URL="postgresql://postgres:postgres@localhost:5432/myh_applications"
 ```
 
-Frontend features can include:
+macOS/Linux:
 
-```text
-pagination
-selectable page size
-filters
-charts for statistics
-provider browsing
-CSV export button
+```bash
+export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/myh_applications"
 ```
 
-The frontend should show that the API can be consumed by another part of a system.
+Load or refresh the database from the curated CSV:
+
+```bash
+python backend/scripts/load_curated_data.py --csv-path ../path/to/myh_curated_applications_2020_2025.csv
+```
+
+Validate that PostgreSQL matches the curated CSV:
+
+```bash
+python backend/scripts/validate_database.py --csv-path ../path/to/myh_curated_applications_2020_2025.csv
+```
+
+Start the API:
+
+```bash
+uvicorn backend.app.main:app --reload
+```
+
+In another terminal, run the final smoke test:
+
+```bash
+python backend/scripts/smoke_test_api.py
+```
+
+For a presentation-friendly endpoint sequence, run:
+
+```bash
+python backend/scripts/demo_api.py
+```
+
+To include the operational refresh call in the demo sequence:
+
+```bash
+python backend/scripts/demo_api.py --include-refresh
+```
+
+## What the project does not do
+
+The Part 3 backend does not currently include:
+
+```text
+authentication or user accounts
+frontend/dashboard code
+background workers or schedulers
+production deployment setup
+raw MYH Excel fetching
+full Part 2 notebook reruns through the API
+POST /ingestion/run
+```
+
+This boundary is intentional. The final API already demonstrates SQL storage, record access, filtering, browsing, statistics, provider browsing, export, trends, and refresh in a way that is still understandable.
+
+## Optional next direction
+
+After Sub-project 3.8, the main backend/API path is demo-ready. The next step should be final presentation preparation: choose a clear video flow, rehearse the local validation commands, and decide whether a very small optional dashboard or final polish layer would actually improve the presentation.
+
+Do not add a frontend, authorization layer, or second operational endpoint unless it clearly adds value and remains explainable.
 
 ## Git policy
 
@@ -251,5 +272,6 @@ feat(part-3): add provider browsing endpoints
 feat(part-3): add filtered CSV export endpoint
 feat(part-3): add trend statistics endpoints
 feat(part-3): add operational refresh endpoint
-feat(part-3): add frontend API browsing foundation
+test(part-3): add final API demo validation flow
+docs(part-3): polish final API documentation
 ```
