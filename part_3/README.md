@@ -43,7 +43,7 @@ Principles:
 - Keep commits focused on coherent project changes.
 - Keep internal handoff/control files outside Git tracking.
 
-## Current backend shape after Sub-project 3.4
+## Current backend shape after Sub-project 3.6
 
 The backend is intentionally compact:
 
@@ -118,9 +118,9 @@ locations(lan, kommun)
 
 The first goal is understandable query performance, not advanced database optimization.
 
-## Implemented API after Sub-project 3.4
+## Implemented API after Sub-project 3.6
 
-The API reads from PostgreSQL and returns JSON responses.
+The API reads from PostgreSQL and returns JSON browsing, statistics, trend-statistics, provider-browsing, and CSV export responses.
 
 Implemented endpoints:
 
@@ -132,8 +132,12 @@ GET /stats/by-year
 GET /stats/by-region
 GET /stats/by-education-area
 GET /stats/by-decision
+GET /stats/trends/by-decision
+GET /stats/trends/by-region
+GET /stats/trends/by-education-area
 GET /providers
 GET /providers/{provider_id}/applications
+GET /export/applications
 ```
 
 `GET /applications` supports useful filters and pagination:
@@ -150,7 +154,17 @@ limit
 offset
 ```
 
+The trend endpoints support simple year-range filters through `year_from` and `year_to`. Decision trends can be filtered by normalized `decision`; region trends can be filtered by `region` or `lan`; education-area trends can be filtered by `education_area`. Region and education-area trends also support an optional `limit` for top groups.
+
 Provider browsing uses numeric `provider_id` values in path parameters. Provider names are still useful as query parameters, but they should not be used as path parameters because names may contain spaces, punctuation, Swedish characters, or organization suffixes.
+
+`GET /export/applications` supports filtered CSV downloads with assignment-style examples such as:
+
+```text
+GET /export/applications?year=2024&decision=approved
+GET /export/applications?provider=...
+GET /export/applications?provider_id=...
+```
 
 Recommended pagination defaults:
 
@@ -160,41 +174,17 @@ offset=0
 max_limit=500
 ```
 
-## Next backend step: Sub-project 3.5
-
-Sub-project 3.5 should add the filtered export API as the next backend capability:
-
-```text
-GET /export/applications
-```
-
-The export endpoint should support assignment-style and API-friendly examples such as:
-
-```text
-GET /export/applications?year=2024&decision=approved
-GET /export/applications?provider=...
-GET /export/applications?provider_id=...
-```
-
-CSV should be the main export format because it is practical, easy to demonstrate, and useful for API consumers who need downloadable filtered data.
-
-3.5 should not repeat existing 3.3 or 3.4 endpoints as new features. It should build on them.
-
 ## Later staged direction
 
-The project remains open for further ambition after the filtered export API:
+The project remains open for further ambition after the trend-statistics API:
 
 ```text
-3.5 Filtered Export API and Backend Validation
-3.6 Trend Statistics API
 3.7 Operational Refresh / Ingestion Workflow
 3.8 Frontend Foundation
 3.9 Dashboard and Browsing Interface
 3.10 Optional Authorization Layer
 3.11 Final Validation, Demo Flow, and Submission Readiness
 ```
-
-Trend statistics should build on the existing statistics endpoints and show development over `source_year`, for example trends by decision, region, or education area. This belongs after the filtered export API so 3.5 stays focused.
 
 Operational endpoints belong after the export API and trend statistics are stable. The likely first operational endpoint is:
 
