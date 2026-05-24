@@ -96,6 +96,32 @@ class DecisionStats(BaseModel):
     application_share_percent: float
 
 
+class DecisionTrend(BaseModel):
+    """Yearly application count for one normalized decision."""
+
+    source_year: int
+    decision_code: str
+    decision_label: str
+    application_count: int
+
+
+class RegionTrend(BaseModel):
+    """Yearly application count for one län/region."""
+
+    source_year: int
+    lan: str
+    application_count: int
+
+
+class EducationAreaTrend(BaseModel):
+    """Yearly application count for one education area."""
+
+    source_year: int
+    education_area_id: int
+    utbildningsomrade: str
+    application_count: int
+
+
 class ProviderSummary(BaseModel):
     """Provider row returned by the provider browsing endpoint."""
 
