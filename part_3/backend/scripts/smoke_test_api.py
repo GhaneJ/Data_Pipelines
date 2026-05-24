@@ -48,6 +48,18 @@ def require_items(response: dict[str, Any], endpoint: str) -> list[dict[str, Any
     return items
 
 
+def require_trend_rows(rows: Any, endpoint: str, expected_fields: set[str]) -> list[dict[str, Any]]:
+    """Check that a trend endpoint returns rows with the expected basic shape."""
+    if not isinstance(rows, list) or not rows:
+        raise SystemExit(f"Expected trend rows from {endpoint}.")
+
+    missing_fields = expected_fields - set(rows[0])
+    if missing_fields:
+        raise SystemExit(f"Missing fields from {endpoint}: {sorted(missing_fields)}")
+
+    return rows
+
+
 def main() -> None:
     """Run read-only checks against the local API."""
     parser = argparse.ArgumentParser(description="Smoke test the local MYH Applications API.")
@@ -85,6 +97,29 @@ def main() -> None:
     decisions = {row["decision_code"] for row in decision_stats}
     if decisions != EXPECTED_DECISIONS:
         raise SystemExit(f"Unexpected decisions from /stats/by-decision: {sorted(decisions)}")
+
+    decision_trend_params = urlencode({"year_from": 2024, "year_to": 2025, "decision": "approved"})
+    decision_trends = require_trend_rows(
+        get_json(f"{base_url}/stats/trends/by-decision?{decision_trend_params}"),
+        "/stats/trends/by-decision",
+        {"source_year", "decision_code", "decision_label", "application_count"},
+    )
+    if any(row["decision_code"] != "approved" for row in decision_trends):
+        raise SystemExit("Decision trend filter returned a non-approved row.")
+
+    region_trend_params = urlencode({"year_from": 2024, "year_to": 2025, "limit": 3})
+    require_trend_rows(
+        get_json(f"{base_url}/stats/trends/by-region?{region_trend_params}"),
+        "/stats/trends/by-region",
+        {"source_year", "lan", "application_count"},
+    )
+
+    education_trend_params = urlencode({"year_from": 2024, "year_to": 2025, "limit": 3})
+    require_trend_rows(
+        get_json(f"{base_url}/stats/trends/by-education-area?{education_trend_params}"),
+        "/stats/trends/by-education-area",
+        {"source_year", "education_area_id", "utbildningsomrade", "application_count"},
+    )
 
     providers = get_json(f"{base_url}/providers?limit=3")
     provider_items = require_items(providers, "/providers")
