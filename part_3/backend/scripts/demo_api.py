@@ -97,6 +97,7 @@ def main() -> None:
     steps: list[DemoStep] = [
         DemoStep("Service landing page", "GET", "/", "Shows that the FastAPI service is running."),
         DemoStep("Health check", "GET", "/health", "Quick operational check for local validation."),
+        DemoStep("Database readiness", "GET", "/health/db", "Checks database connection, required tables, and loaded rows."),
         DemoStep(
             "Filtered application browsing",
             "GET",

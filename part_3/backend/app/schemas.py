@@ -149,3 +149,35 @@ class RefreshResult(BaseModel):
     rows_loaded: int
     source_file: str
     refreshed_at: str
+
+class HealthStatus(BaseModel):
+    """Lightweight API health-check response."""
+
+    status: str
+
+
+class RequiredTablesHealth(BaseModel):
+    """Readiness result for required database tables."""
+
+    ok: bool
+    checked: list[str]
+    missing: list[str]
+
+
+class TableRowHealth(BaseModel):
+    """Readiness result for a table that should contain rows."""
+
+    table: str
+    ok: bool
+    row_count: int
+
+
+class DatabaseHealth(BaseModel):
+    """Database readiness response used by GET /health/db."""
+
+    status: str
+    database_connected: bool
+    required_tables: RequiredTablesHealth
+    applications: TableRowHealth | None = None
+    lookup_tables: list[TableRowHealth]
+

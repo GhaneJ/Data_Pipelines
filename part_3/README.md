@@ -4,7 +4,7 @@
 
 Part 3 turns the curated Part 2 MYH applications dataset into a small internal data service.
 
-The project shows the path from a trusted curated dataset to PostgreSQL storage, a FastAPI API, and the planned portfolio extensions around scheduled source checking, protected operations, React visualization, and a small explainable ML layer. The implementation should stay practical and explainable while still using normal professional structure where it solves real project problems.
+The project shows the path from a trusted curated dataset to PostgreSQL storage, a FastAPI API, and a backend structure that can support the remaining portfolio extensions: scheduled MYH source checking, protected operations, React visualization, and a small explainable ML layer. The implementation stays practical and explainable while using normal professional structure where it solves real project problems.
 
 ## Source of truth
 
@@ -23,38 +23,55 @@ Main record identifier: diarienummer
 Main grain: one application record per diarienummer
 ```
 
-The raw Excel files are not loaded directly by the Part 3 API. They belong to the Part 2 transformation journey. Part 3 operationalizes the finished curated dataset.
+The raw Excel files are not loaded directly by the current Part 3 API. They belong to the Part 2 transformation journey. Sub-project 3.11 is planned to add a controlled scheduled source-check workflow for newly published MYH files.
 
 ## Implementation principles
 
-- Keep the implementation direct and easy to explain.
 - Use PostgreSQL as the database.
 - Use FastAPI for the backend API.
 - Use psycopg 3 for PostgreSQL access.
 - Use raw SQL for database queries.
 - Do not use an ORM.
-- Keep comments and docstrings concise and useful.
-- Add structure only when it solves a real project need.
-- Keep commits focused on coherent project changes.
+- Keep endpoint behavior backward compatible unless a real bug is found.
+- Add structure only when it improves maintainability, validation, or later roadmap work.
 - Keep internal handoff/control files outside Git tracking.
 
-## Current backend shape after Sub-project 3.8
+## Current backend shape after Sub-project 3.10
 
-The accepted 3.8 backend baseline is:
+Sub-project 3.10 reorganized the accepted 3.8 backend into routers and services, added database readiness checks, logging, centralized database-error handling, and focused pytest coverage.
 
 ```text
 part_3/
   README.md
-  .gitignore
+  pyproject.toml
   backend/
     README.md
     requirements.txt
     app/
       __init__.py
       database.py
+      dependencies.py
+      exception_handlers.py
+      logging_config.py
       main.py
-      queries.py
+      queries.py                 # compatibility exports for older imports
       schemas.py
+      routers/
+        __init__.py
+        applications.py
+        export.py
+        health.py
+        operations.py
+        providers.py
+        stats.py
+      services/
+        __init__.py
+        applications.py
+        common.py
+        export.py
+        health.py
+        providers.py
+        stats.py
     scripts/
       demo_api.py
       load_curated_data.py
@@ -63,9 +80,14 @@ part_3/
     sql/
       schema.sql
       indexes.sql
+    tests/
+      test_filter_helpers.py
+      test_health_service.py
+      test_routes.py
+      test_schemas_and_export.py
 ```
 
-This structure is the accepted 3.8 baseline before the expanded portfolio roadmap. The next implementation steps should add routers/services, scheduled source-check support, protected admin operations, React frontend code, and ML only through coherent sub-projects with clear tests and documentation.
+`main.py` is now app assembly only. Route code lives in `backend/app/routers/`. Database-backed query/business logic lives in `backend/app/services/`. Response models remain in `schemas.py` because splitting small schemas further was not necessary for this step.
 
 ## Database shape
 
@@ -85,7 +107,7 @@ study_forms
 
 The `applications` table remains the central table. Repeated high-value fields such as provider, education area, location, decision, principal type, and study form are represented through lookup tables.
 
-Traceability fields from the curated dataset are preserved, including:
+Traceability fields from the curated dataset are preserved:
 
 ```text
 source_year
@@ -99,7 +121,7 @@ diarienummer
 
 The API reads from PostgreSQL and provides:
 
-- service health/status checks,
+- service and database readiness checks,
 - record access,
 - filtered and paginated browsing,
 - grouped statistics,
@@ -113,6 +135,7 @@ Implemented endpoints:
 ```text
 GET  /
 GET  /health
+GET  /health/db
 GET  /applications
 GET  /applications/{diarienummer}
 GET  /stats/by-year
@@ -127,6 +150,14 @@ GET  /providers/{provider_id}/applications
 GET  /export/applications
 POST /refresh
 ```
+
+### `/health` versus `/health/db`
+
+`GET /health` is intentionally lightweight. It only confirms that the FastAPI process can respond.
+
+`GET /health/db` checks database readiness for real API use. It verifies that the database connection works, required tables exist, the `applications` table has rows, and key lookup tables have rows. This endpoint is useful for local validation now and for the planned React dashboard later.
+
+## Filters and exports
 
 `GET /applications` supports useful filters and pagination:
 
@@ -154,15 +185,7 @@ GET /export/applications?provider_id=1
 
 Trend endpoints support `year_from` and `year_to`. Decision trends can be filtered by `decision`, region trends by `region` or `lan`, and education-area trends by `education_area`. Region and education-area trends also support `limit` to return top groups for presentation or charting.
 
-In the accepted 3.8 baseline, `POST /refresh` reloads PostgreSQL from the existing curated CSV. It validates required columns and expected dataset assumptions, recreates the current schema, reloads lookup tables and applications, and returns a short JSON summary. The expanded roadmap upgrades this story in Sub-project 3.11 with a scheduled-job-friendly MYH source-check workflow.
-
-Recommended pagination defaults:
-
-```text
-limit=50
-offset=0
-max_limit=500
-```
+`POST /refresh` reloads PostgreSQL from the existing curated CSV. It validates required columns and expected dataset assumptions, recreates the current schema, reloads lookup tables and applications, and returns a short JSON summary. Sub-project 3.11 is planned to improve the source-check/refresh story with a scheduler-friendly MYH source check.
 
 ## Local validation flow
 
@@ -186,6 +209,18 @@ macOS/Linux:
 export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/myh_applications"
 ```
 
+Compile-check the backend:
+
+```bash
+python -m py_compile backend/app/*.py backend/app/routers/*.py backend/app/services/*.py backend/scripts/*.py
+```
+
+Run the focused tests:
+
+```bash
+python -m pytest
+```
+
 Load or refresh the database from the curated CSV:
 
 ```bash
@@ -204,6 +239,15 @@ Start the API:
 uvicorn backend.app.main:app --reload
 ```
 
+Manual browser/API checks:
+
+```text
+http://127.0.0.1:8000/
+http://127.0.0.1:8000/health
+http://127.0.0.1:8000/health/db
+http://127.0.0.1:8000/docs
+```
+
 In another terminal, run the final smoke test:
 
 ```bash
@@ -214,6 +258,7 @@ For a presentation-friendly endpoint sequence, run:
 
 ```bash
 python backend/scripts/demo_api.py
+python backend/scripts/demo_api.py --print-only
 ```
 
 To include the operational refresh call in the demo sequence:
@@ -222,15 +267,15 @@ To include the operational refresh call in the demo sequence:
 python backend/scripts/demo_api.py --include-refresh
 ```
 
-## Expanded roadmap after assessor allowance
+## Expanded roadmap after 3.10
 
-The assignment remains the baseline for required deliverables, but the assessor has allowed stronger additions when they remain explainable at vocational/YH-student level and improve the final project/demo value. The project direction is now a portfolio-quality full-stack data project, not only a compact API.
+The assignment remains the baseline for required deliverables, but the assessor has allowed stronger additions when they remain explainable at vocational/YH-student level and improve the final project/demo value.
 
-Planned roadmap from the accepted 3.8 baseline:
+Current roadmap:
 
 ```text
-3.10 Backend Structure and Robustness Foundation
-3.11 Scheduled MYH Source Check and Refresh Upgrade
+3.10 Backend Structure and Robustness Foundation — completed
+3.11 Scheduled MYH Source Check and Refresh Upgrade — next
 3.12 Protected Admin Operations and Safe Write Use Case
 3.13 React + TypeScript Visualization and Trend Dashboard
 3.14 Small Explainable ML Extension
@@ -243,7 +288,7 @@ Guiding rule:
 Vocational level means explainable and proportionate, not toy-like or artificially weak. Use normal professional structure when it improves correctness, maintainability, robustness, or presentation value.
 ```
 
-Frontend, scheduler/source-check support, protected admin operations, and ML are planned roadmap additions from the accepted 3.8 baseline, not rejected features.
+No React frontend, ML module, scheduled MYH source checking, or protected admin write operation is implemented in 3.10.
 
 ## Git policy
 
@@ -258,21 +303,4 @@ node_modules
 database dumps
 local runtime files
 internal handoff/control files
-```
-
-Good commit examples:
-
-```text
-docs(part-3): define architecture and implementation plan
-chore(part-3): ignore local runtime artifacts
-feat(part-3): add PostgreSQL schema and indexes
-feat(part-3): load and validate curated dataset
-feat(part-3): add core application endpoints
-feat(part-3): add extended statistics endpoints
-feat(part-3): add provider browsing endpoints
-feat(part-3): add filtered CSV export endpoint
-feat(part-3): add trend statistics endpoints
-feat(part-3): add operational refresh endpoint
-test(part-3): add final API demo validation flow
-docs(part-3): polish final API documentation
 ```
