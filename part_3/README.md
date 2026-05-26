@@ -4,11 +4,11 @@
 
 Part 3 turns the curated Part 2 MYH applications dataset into a small internal data service.
 
-The project shows the path from a trusted curated dataset to PostgreSQL storage, a FastAPI API, and a backend structure that can support the remaining portfolio extensions: scheduled MYH source checking, protected operations, React visualization, and a small explainable ML layer. The implementation stays practical and explainable while using normal professional structure where it solves real project problems.
+The project shows the path from a trusted curated dataset to PostgreSQL storage, a FastAPI API, and a backend structure that can support the remaining portfolio extensions: protected operations, React visualization, and a small explainable ML layer. The implementation stays practical and explainable while using normal professional structure where it solves real project problems.
 
 ## Source of truth
 
-The curated CSV from Part 2 is the loading source for the Part 3 database:
+The curated CSV from Part 2 is still the loading source for the Part 3 database:
 
 ```text
 myh_curated_applications_2020_2025.csv
@@ -23,7 +23,7 @@ Main record identifier: diarienummer
 Main grain: one application record per diarienummer
 ```
 
-The raw Excel files are not loaded directly by the current Part 3 API. They belong to the Part 2 transformation journey. Sub-project 3.11 is planned to add a controlled scheduled source-check workflow for newly published MYH files.
+Sub-project 3.11 adds a controlled MYH source-check foundation. It can inspect the configured official MYH result page, record a local source-status manifest, and help decide whether the local curated CSV may be stale. It does **not** automatically download new Excel files or overwrite the curated dataset.
 
 ## Implementation principles
 
@@ -33,12 +33,14 @@ The raw Excel files are not loaded directly by the current Part 3 API. They belo
 - Use raw SQL for database queries.
 - Do not use an ORM.
 - Keep endpoint behavior backward compatible unless a real bug is found.
-- Add structure only when it improves maintainability, validation, or later roadmap work.
-- Keep internal handoff/control files outside Git tracking.
+- Add structure only when it improves maintainability, validation, operations, or later roadmap work.
+- Keep generated runtime files and internal handoff/control files outside Git tracking.
 
-## Current backend shape after Sub-project 3.10
+## Current backend shape after Sub-project 3.11
 
-Sub-project 3.10 reorganized the accepted 3.8 backend into routers and services, added database readiness checks, logging, centralized database-error handling, and focused pytest coverage.
+Sub-project 3.10 reorganized the backend into routers and services, added database readiness checks, logging, centralized database-error handling, and focused pytest coverage.
+
+Sub-project 3.11 added a modest scheduled-source-check foundation and refresh metadata upgrade.
 
 ```text
 part_3/
@@ -71,8 +73,12 @@ part_3/
         export.py
         health.py
         providers.py
+        source_check.py           # MYH source-page check and manifest helpers
         stats.py
+    runtime/
+      README.md                   # generated source_status.json belongs here locally
     scripts/
+      check_source_status.py      # manual/scheduler-ready source-check script
       demo_api.py
       load_curated_data.py
       smoke_test_api.py
@@ -81,13 +87,16 @@ part_3/
       schema.sql
       indexes.sql
     tests/
+      test_check_source_status_script.py
       test_filter_helpers.py
       test_health_service.py
+      test_operations_routes.py
       test_routes.py
       test_schemas_and_export.py
+      test_source_check_service.py
 ```
 
-`main.py` is now app assembly only. Route code lives in `backend/app/routers/`. Database-backed query/business logic lives in `backend/app/services/`. Response models remain in `schemas.py` because splitting small schemas further was not necessary for this step.
+`main.py` remains app assembly only. Route code lives in `backend/app/routers/`. Database-backed query/business logic lives in `backend/app/services/`. Response models remain in `schemas.py` because splitting small schemas further is still unnecessary.
 
 ## Database shape
 
@@ -122,6 +131,7 @@ diarienummer
 The API reads from PostgreSQL and provides:
 
 - service and database readiness checks,
+- MYH source-check status and manual source-check operation,
 - record access,
 - filtered and paginated browsing,
 - grouped statistics,
@@ -136,6 +146,8 @@ Implemented endpoints:
 GET  /
 GET  /health
 GET  /health/db
+GET  /operations/source-status
+POST /operations/check-source
 GET  /applications
 GET  /applications/{diarienummer}
 GET  /stats/by-year
@@ -156,6 +168,69 @@ POST /refresh
 `GET /health` is intentionally lightweight. It only confirms that the FastAPI process can respond.
 
 `GET /health/db` checks database readiness for real API use. It verifies that the database connection works, required tables exist, the `applications` table has rows, and key lookup tables have rows. This endpoint is useful for local validation now and for the planned React dashboard later.
+
+## MYH source-check foundation
+
+Sub-project 3.11 introduces a small source-check layer:
+
+```text
+backend/app/services/source_check.py
+backend/scripts/check_source_status.py
+backend/runtime/README.md
+```
+
+The source check can:
+
+- call the configured MYH result source page,
+- discover visible Excel links when simple link extraction is enough,
+- include configured/allowlisted file names or URLs through environment variables or script arguments,
+- compare the latest visible source year with the local curated CSV `source_year`,
+- write a local JSON manifest at `backend/runtime/source_status.json`,
+- report whether the local curated data appears up to date, possibly stale, or needs manual review.
+
+The source check does **not**:
+
+- run as a background service,
+- create an operating-system scheduled task,
+- download and replace raw Excel files,
+- rebuild the Part 2 notebook output,
+- overwrite the curated CSV,
+- refresh PostgreSQL automatically.
+
+Useful environment variables:
+
+```text
+MYH_SOURCE_URL                         # override the official source page URL
+MYH_SOURCE_FILES                       # comma-separated known source file names or URLs
+MYH_SOURCE_STATUS_PATH                 # override backend/runtime/source_status.json
+MYH_CURATED_CSV_PATH                   # explicit curated CSV path for source_year comparison
+MYH_SOURCE_CHECK_TIMEOUT_SECONDS       # HTTP timeout for the source check
+```
+
+Manual script:
+
+```bash
+python backend/scripts/check_source_status.py
+python backend/scripts/check_source_status.py --no-write-manifest
+python backend/scripts/check_source_status.py --configured-file resultat-2025.xlsx
+```
+
+API endpoints:
+
+```bash
+curl "http://127.0.0.1:8000/operations/source-status"
+curl -X POST "http://127.0.0.1:8000/operations/check-source"
+```
+
+`GET /operations/source-status` reads the latest local manifest and does not call the internet. If no check has been recorded, it returns `status: "not_checked"`.
+
+`POST /operations/check-source` performs one manual source check and writes/updates the local manifest. It does not modify application data.
+
+Generated source manifests are local runtime files and should not be committed:
+
+```text
+backend/runtime/source_status.json
+```
 
 ## Filters and exports
 
@@ -185,7 +260,29 @@ GET /export/applications?provider_id=1
 
 Trend endpoints support `year_from` and `year_to`. Decision trends can be filtered by `decision`, region trends by `region` or `lan`, and education-area trends by `education_area`. Region and education-area trends also support `limit` to return top groups for presentation or charting.
 
-`POST /refresh` reloads PostgreSQL from the existing curated CSV. It validates required columns and expected dataset assumptions, recreates the current schema, reloads lookup tables and applications, and returns a short JSON summary. Sub-project 3.11 is planned to improve the source-check/refresh story with a scheduler-friendly MYH source check.
+## Operational refresh
+
+`POST /refresh` still reloads PostgreSQL from the existing curated CSV. It validates required columns and expected dataset assumptions, recreates the current schema, reloads lookup tables and applications, and returns a JSON summary.
+
+3.11 adds source-check metadata to the refresh response when a source-status manifest is available. The endpoint remains safe: it does not download new MYH files or overwrite the curated CSV.
+
+Example:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/refresh"
+```
+
+Optional guardrail:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/refresh?require_recent_source_check=true"
+```
+
+When `require_recent_source_check=true`, refresh is rejected unless a recent non-error source-check manifest exists. The default maximum age is 24 hours and can be adjusted:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/refresh?require_recent_source_check=true&max_source_check_age_hours=48"
+```
 
 ## Local validation flow
 
@@ -212,13 +309,25 @@ export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/myh_applicati
 Compile-check the backend:
 
 ```bash
-python -m py_compile backend/app/*.py backend/app/routers/*.py backend/app/services/*.py backend/scripts/*.py
+python -m compileall backend/app backend/scripts
 ```
 
 Run the focused tests:
 
 ```bash
 python -m pytest
+```
+
+Print the final demo sequence without calling the API:
+
+```bash
+python backend/scripts/demo_api.py --print-only
+```
+
+Run the source-check script manually:
+
+```bash
+python backend/scripts/check_source_status.py
 ```
 
 Load or refresh the database from the curated CSV:
@@ -245,10 +354,11 @@ Manual browser/API checks:
 http://127.0.0.1:8000/
 http://127.0.0.1:8000/health
 http://127.0.0.1:8000/health/db
+http://127.0.0.1:8000/operations/source-status
 http://127.0.0.1:8000/docs
 ```
 
-In another terminal, run the final smoke test:
+In another terminal, run the smoke test:
 
 ```bash
 python backend/scripts/smoke_test_api.py
@@ -267,7 +377,7 @@ To include the operational refresh call in the demo sequence:
 python backend/scripts/demo_api.py --include-refresh
 ```
 
-## Expanded roadmap after 3.10
+## Expanded roadmap after 3.11
 
 The assignment remains the baseline for required deliverables, but the assessor has allowed stronger additions when they remain explainable at vocational/YH-student level and improve the final project/demo value.
 
@@ -275,8 +385,8 @@ Current roadmap:
 
 ```text
 3.10 Backend Structure and Robustness Foundation — completed
-3.11 Scheduled MYH Source Check and Refresh Upgrade — next
-3.12 Protected Admin Operations and Safe Write Use Case
+3.11 Scheduled MYH Source Check and Refresh Upgrade — completed
+3.12 Protected Admin Operations and Safe Write Use Case — next
 3.13 React + TypeScript Visualization and Trend Dashboard
 3.14 Small Explainable ML Extension
 3.15 Final Integration, Presentation Update, and Submission Cleanup
@@ -285,10 +395,10 @@ Current roadmap:
 Guiding rule:
 
 ```text
-Vocational level means explainable and proportionate, not toy-like or artificially weak. Use normal professional structure when it improves correctness, maintainability, robustness, or presentation value.
+Vocational level means explainable and proportionate, not toy-like or artificially weak. Use normal professional structure when it improves correctness, maintainability, robustness, operations, or presentation value.
 ```
 
-No React frontend, ML module, scheduled MYH source checking, or protected admin write operation is implemented in 3.10.
+No React frontend, ML module, or protected admin write operation is implemented in 3.11.
 
 ## Git policy
 
@@ -301,6 +411,6 @@ virtual environments
 node_modules
 .env files
 database dumps
-local runtime files
+local runtime/generated files such as backend/runtime/source_status.json
 internal handoff/control files
 ```
