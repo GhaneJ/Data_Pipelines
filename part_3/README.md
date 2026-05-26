@@ -4,7 +4,7 @@
 
 Part 3 turns the curated Part 2 MYH applications dataset into a small internal data service.
 
-The project shows the full path from a trusted curated CSV to PostgreSQL storage and a FastAPI API that another system, analyst, or presentation layer can consume. The implementation stays practical and explainable: PostgreSQL, FastAPI, psycopg 3, raw SQL, and a compact backend structure.
+The project shows the path from a trusted curated dataset to PostgreSQL storage, a FastAPI API, and the planned portfolio extensions around scheduled source checking, protected operations, React visualization, and a small explainable ML layer. The implementation should stay practical and explainable while still using normal professional structure where it solves real project problems.
 
 ## Source of truth
 
@@ -40,7 +40,7 @@ The raw Excel files are not loaded directly by the Part 3 API. They belong to th
 
 ## Current backend shape after Sub-project 3.8
 
-The backend remains intentionally compact:
+The accepted 3.8 backend baseline is:
 
 ```text
 part_3/
@@ -65,7 +65,7 @@ part_3/
       indexes.sql
 ```
 
-This is enough for the current SQL + API layer. Routers, service layers, frontend folders, authentication modules, background workers, or schedulers should only be added later if they clearly improve the final project.
+This structure is the accepted 3.8 baseline before the expanded portfolio roadmap. The next implementation steps should add routers/services, scheduled source-check support, protected admin operations, React frontend code, and ML only through coherent sub-projects with clear tests and documentation.
 
 ## Database shape
 
@@ -154,7 +154,7 @@ GET /export/applications?provider_id=1
 
 Trend endpoints support `year_from` and `year_to`. Decision trends can be filtered by `decision`, region trends by `region` or `lan`, and education-area trends by `education_area`. Region and education-area trends also support `limit` to return top groups for presentation or charting.
 
-`POST /refresh` reloads PostgreSQL from the existing curated CSV. It validates required columns and expected dataset assumptions, recreates the current schema, reloads lookup tables and applications, and returns a short JSON summary. It does not fetch new MYH files or rerun the full Part 2 notebook pipeline.
+In the accepted 3.8 baseline, `POST /refresh` reloads PostgreSQL from the existing curated CSV. It validates required columns and expected dataset assumptions, recreates the current schema, reloads lookup tables and applications, and returns a short JSON summary. The expanded roadmap upgrades this story in Sub-project 3.11 with a scheduled-job-friendly MYH source-check workflow.
 
 Recommended pagination defaults:
 
@@ -222,27 +222,28 @@ To include the operational refresh call in the demo sequence:
 python backend/scripts/demo_api.py --include-refresh
 ```
 
-## What the project does not do
+## Expanded roadmap after assessor allowance
 
-The Part 3 backend does not currently include:
+The assignment remains the baseline for required deliverables, but the assessor has allowed stronger additions when they remain explainable at vocational/YH-student level and improve the final project/demo value. The project direction is now a portfolio-quality full-stack data project, not only a compact API.
+
+Planned roadmap from the accepted 3.8 baseline:
 
 ```text
-authentication or user accounts
-frontend/dashboard code
-background workers or schedulers
-production deployment setup
-raw MYH Excel fetching
-full Part 2 notebook reruns through the API
-POST /ingestion/run
+3.10 Backend Structure and Robustness Foundation
+3.11 Scheduled MYH Source Check and Refresh Upgrade
+3.12 Protected Admin Operations and Safe Write Use Case
+3.13 React + TypeScript Visualization and Trend Dashboard
+3.14 Small Explainable ML Extension
+3.15 Final Integration, Presentation Update, and Submission Cleanup
 ```
 
-This boundary is intentional. The final API already demonstrates SQL storage, record access, filtering, browsing, statistics, provider browsing, export, trends, and refresh in a way that is still understandable.
+Guiding rule:
 
-## Optional next direction
+```text
+Vocational level means explainable and proportionate, not toy-like or artificially weak. Use normal professional structure when it improves correctness, maintainability, robustness, or presentation value.
+```
 
-After Sub-project 3.8, the main backend/API path is demo-ready. The next step should be final presentation preparation: choose a clear video flow, rehearse the local validation commands, and decide whether a very small optional dashboard or final polish layer would actually improve the presentation.
-
-Do not add a frontend, authorization layer, or second operational endpoint unless it clearly adds value and remains explainable.
+Frontend, scheduler/source-check support, protected admin operations, and ML are planned roadmap additions from the accepted 3.8 baseline, not rejected features.
 
 ## Git policy
 

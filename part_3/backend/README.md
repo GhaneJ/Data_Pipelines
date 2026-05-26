@@ -265,12 +265,18 @@ What refresh does:
 - reloads lookup tables and the central `applications` table,
 - returns a short JSON summary.
 
-What refresh does not do:
+Current 3.8 refresh baseline:
 
-- it does not fetch new MYH files,
-- it does not rerun the Part 2 notebook or raw Excel harmonization,
-- it does not run in the background,
-- it does not add authentication or scheduling.
+- reloads the existing curated CSV into PostgreSQL,
+- validates required curated columns and expected assumptions before loading,
+- runs synchronously and returns a clear JSON summary.
+
+Planned 3.11 refresh upgrade:
+
+- add a scheduled-job-friendly MYH source-check script,
+- compare discovered source files against a stored manifest/status record,
+- download or record newly discovered MYH files in a controlled source folder,
+- expose status so the API/dashboard can show whether the source check is current.
 
 The curated CSV should be available in one of the same default locations used by the loader, for example:
 
