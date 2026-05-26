@@ -106,6 +106,12 @@ def main() -> None:
     if not refresh.get("refreshed_at"):
         raise SystemExit(f"Refresh response did not include refreshed_at: {refresh}")
 
+    db_health = get_json(f"{base_url}/health/db")
+    if db_health.get("status") != "ready":
+        raise SystemExit(f"Unexpected database health response: {db_health}")
+    if db_health.get("applications", {}).get("row_count", 0) <= 0:
+        raise SystemExit(f"Database health did not report application rows: {db_health}")
+
     params = urlencode({"source_year": 2024, "decision": "approved", "limit": 3})
     applications = get_json(f"{base_url}/applications?{params}")
     application_items = require_items(applications, "/applications")
