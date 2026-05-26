@@ -142,6 +142,30 @@ class ProviderList(BaseModel):
     items: list[ProviderSummary]
 
 
+class SourceFileCandidate(BaseModel):
+    """A MYH source file candidate visible or configured for source checking."""
+
+    file_name: str
+    url: str | None = None
+
+
+class SourceCheckResult(BaseModel):
+    """Result from checking the configured MYH source location."""
+
+    checked_at: str | None = None
+    source_url: str
+    status: str
+    http_status: int | None = None
+    content_type: str | None = None
+    discovered_files: list[SourceFileCandidate]
+    configured_files: list[SourceFileCandidate]
+    known_latest_source_snapshot: int | None = None
+    local_latest_source_year: int | None = None
+    up_to_date: bool | None = None
+    message: str
+    error: str | None = None
+
+
 class RefreshResult(BaseModel):
     """Summary returned after reloading the database from the curated CSV."""
 
@@ -149,6 +173,14 @@ class RefreshResult(BaseModel):
     rows_loaded: int
     source_file: str
     refreshed_at: str
+    refresh_mode: str | None = None
+    source_check_status: str | None = None
+    source_check_checked_at: str | None = None
+    source_check_message: str | None = None
+    known_latest_source_snapshot: int | None = None
+    local_latest_source_year: int | None = None
+    source_up_to_date: bool | None = None
+
 
 class HealthStatus(BaseModel):
     """Lightweight API health-check response."""
