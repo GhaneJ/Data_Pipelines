@@ -42,6 +42,8 @@ def test_expected_routes_are_registered() -> None:
         "/providers",
         "/providers/{provider_id}/applications",
         "/export/applications",
+        "/operations/source-status",
+        "/operations/check-source",
         "/refresh",
     }
 

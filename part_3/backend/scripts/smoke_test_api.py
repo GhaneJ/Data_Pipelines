@@ -112,6 +112,10 @@ def main() -> None:
     if db_health.get("applications", {}).get("row_count", 0) <= 0:
         raise SystemExit(f"Database health did not report application rows: {db_health}")
 
+    source_status = get_json(f"{base_url}/operations/source-status")
+    if "status" not in source_status or "message" not in source_status:
+        raise SystemExit(f"Unexpected source-status response: {source_status}")
+
     params = urlencode({"source_year": 2024, "decision": "approved", "limit": 3})
     applications = get_json(f"{base_url}/applications?{params}")
     application_items = require_items(applications, "/applications")

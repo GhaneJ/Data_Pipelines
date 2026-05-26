@@ -15,7 +15,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="MYH Applications API",
-        version="0.3.10",
+        version="0.3.11",
         description="Read and operational API for the curated MYH applications dataset stored in PostgreSQL.",
     )
     register_exception_handlers(app)

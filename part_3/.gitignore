@@ -26,6 +26,8 @@ env/
 *.dump
 *.backup
 *.log
+backend/runtime/*.json
+!backend/runtime/README.md
 
 # FastAPI / Python tooling
 uvicorn*.log

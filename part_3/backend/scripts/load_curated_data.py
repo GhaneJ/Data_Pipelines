@@ -453,7 +453,8 @@ def refresh_applications_database(
     database_url: str | None = None,
     schema_path: Path = DEFAULT_SCHEMA_PATH,
     indexes_path: Path = DEFAULT_INDEXES_PATH,
-) -> dict[str, str | int]:
+    source_check_metadata: dict[str, str | int | bool | None] | None = None,
+) -> dict[str, str | int | bool | None]:
     """Reload PostgreSQL from the curated CSV and return a small summary."""
     database_url = database_url or os.getenv("DATABASE_URL")
     if not database_url:
@@ -469,12 +470,15 @@ def refresh_applications_database(
         insert_lookup_rows(conn, rows)
         load_applications(conn, rows)
 
-    return {
+    result: dict[str, str | int | bool | None] = {
         "status": "success",
         "rows_loaded": len(rows),
         "source_file": format_source_path(resolved_csv_path),
         "refreshed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
+    if source_check_metadata:
+        result.update(source_check_metadata)
+    return result
 
 def main() -> None:
     """Run schema creation, lookup loading, and application loading."""

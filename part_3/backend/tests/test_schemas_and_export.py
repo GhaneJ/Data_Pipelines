@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import io
 
-from backend.app.schemas import DatabaseHealth, HealthStatus, RefreshResult
+from backend.app.schemas import DatabaseHealth, HealthStatus, RefreshResult, SourceCheckResult
 from backend.app.services.export import rows_to_csv
 
 
@@ -35,6 +35,38 @@ def test_refresh_result_schema() -> None:
 
     assert result.status == "success"
     assert result.rows_loaded == 7641
+
+    with_source_metadata = RefreshResult(
+        status="success",
+        rows_loaded=7641,
+        source_file="part_2/data/processed/myh_curated_applications_2020_2025.csv",
+        refreshed_at="2026-05-24T14:30:00+00:00",
+        refresh_mode="curated_csv",
+        source_check_status="up_to_date",
+        source_up_to_date=True,
+    )
+    assert with_source_metadata.source_check_status == "up_to_date"
+
+
+def test_source_check_result_schema() -> None:
+    """Source-check responses should serialize the documented JSON shape."""
+    result = SourceCheckResult(
+        checked_at="2026-05-27T10:00:00+00:00",
+        source_url="https://example.test",
+        status="up_to_date",
+        http_status=200,
+        content_type="text/html",
+        discovered_files=[{"file_name": "resultat-2025.xlsx", "url": "https://example.test/resultat-2025.xlsx"}],
+        configured_files=[],
+        known_latest_source_snapshot=2025,
+        local_latest_source_year=2025,
+        up_to_date=True,
+        message="OK",
+        error=None,
+    )
+
+    assert result.discovered_files[0].file_name == "resultat-2025.xlsx"
+    assert result.up_to_date is True
 
 
 def test_rows_to_csv_uses_stable_export_columns() -> None:
