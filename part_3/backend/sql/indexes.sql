@@ -39,3 +39,7 @@ CREATE INDEX IF NOT EXISTS idx_education_areas_name
 
 CREATE INDEX IF NOT EXISTS idx_study_forms_name
     ON study_forms (studieform);
+
+
+CREATE INDEX IF NOT EXISTS idx_application_notes_diarienummer
+    ON application_notes (diarienummer);

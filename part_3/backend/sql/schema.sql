@@ -97,3 +97,17 @@ CREATE TABLE applications (
     CONSTRAINT applications_beviljade_omgangar_check CHECK (beviljade_utbildningsomgangar >= 0),
     CONSTRAINT applications_flera_kommuner_check CHECK (flera_kommuner IN ('Ja', 'Nej'))
 );
+
+-- Local admin metadata is deliberately separate from curated MYH source data.
+-- The service validates diarienummer against applications before writing notes.
+-- No foreign key is used here so a full curated-data refresh does not
+-- automatically delete local admin notes.
+CREATE TABLE IF NOT EXISTS application_notes (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    diarienummer TEXT NOT NULL,
+    note_text TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT application_notes_diarienummer_not_blank CHECK (btrim(diarienummer) <> ''),
+    CONSTRAINT application_notes_note_text_not_blank CHECK (btrim(note_text) <> '')
+);
