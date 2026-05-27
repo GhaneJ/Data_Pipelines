@@ -6,7 +6,7 @@ Sub-projects 3.2-3.8 built the working backend gradually: PostgreSQL storage, co
 
 Sub-project 3.10 reorganized that backend into a clearer structure and added database readiness checks, simple logging, centralized database-error handling, and focused pytest coverage.
 
-Sub-project 3.11 added a scheduler-ready MYH source-check foundation, local source-status manifest, source-check operation endpoints, refresh metadata, a manual source-check script, and focused tests that do not depend on live internet access.
+Sub-project 3.11 added a scheduler-ready MYH source-check foundation, local source-status manifest, source-check operation endpoints, refresh metadata, a manual source-check script, and focused tests that do not depend on live internet access. Sub-project 3.12 adds protected admin application notes as a small safe write-side use case.
 
 ## Technology choices
 
@@ -69,7 +69,7 @@ backend/
     test_source_check_service.py
 ```
 
-`main.py` should stay small. New endpoint work should normally go into a router, with database/query or operation logic placed in a service module. This keeps the backend ready for protected operations, React dashboard work, and the ML extension planned after 3.11.
+`main.py` should stay small. New endpoint work should normally go into a router, with database/query or operation logic placed in a service module. This keeps the backend ready for React dashboard work and the ML extension planned after 3.12.
 
 ## Install dependencies
 
@@ -134,7 +134,7 @@ It does not:
 - rewrite the Part 2 curated CSV,
 - run as a background scheduler,
 - refresh PostgreSQL automatically,
-- add protected admin operations.
+- use the protected admin-note endpoints added in 3.12.
 
 Environment variables:
 
@@ -228,6 +228,11 @@ Use `/health` for quick “is the API process alive?” checks. Use `/health/db`
 | `GET /operations/source-status` | Shows the latest MYH source-check manifest. |
 | `POST /operations/check-source` | Checks the configured MYH source page and updates the manifest. |
 | `POST /refresh` | Reloads PostgreSQL from the existing curated CSV. |
+| `GET /admin/applications/{diarienummer}/notes` | Protected local admin-note listing. |
+| `POST /admin/applications/{diarienummer}/notes` | Protected local admin-note creation. |
+| `PUT /admin/notes/{note_id}` | Protected local admin-note replacement. |
+| `PATCH /admin/notes/{note_id}` | Protected local admin-note partial update. |
+| `DELETE /admin/notes/{note_id}` | Protected local admin-note deletion. |
 
 ### Record access and browsing
 
@@ -255,6 +260,59 @@ Use `/health` for quick “is the API process alive?” checks. Use `/health/db`
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /export/applications` | Returns a downloadable filtered CSV export. |
+
+## Protected admin application notes
+
+Sub-project 3.12 adds a small local write-side feature under `/admin`. It is deliberately not a login system. The server reads one configured token from `PART3_ADMIN_TOKEN`, and callers send the same value in the `X-Admin-Token` header.
+
+PowerShell example:
+
+```powershell
+$env:PART3_ADMIN_TOKEN="dev-admin-token"
+```
+
+Bash/macOS/Linux example:
+
+```bash
+export PART3_ADMIN_TOKEN="dev-admin-token"
+```
+
+Example protected calls:
+
+```bash
+curl -H "X-Admin-Token: dev-admin-token" \
+  "http://127.0.0.1:8000/admin/applications/MYH%202024%2F1/notes"
+
+curl -H "X-Admin-Token: dev-admin-token" \
+  -H "Content-Type: application/json" \
+  -X POST \
+  -d '{"note_text":"Check this application before the demo."}' \
+  "http://127.0.0.1:8000/admin/applications/MYH%202024%2F1/notes"
+
+curl -H "X-Admin-Token: dev-admin-token" \
+  -H "Content-Type: application/json" \
+  -X PUT \
+  -d '{"note_text":"Replace the local note text."}' \
+  "http://127.0.0.1:8000/admin/notes/1"
+
+curl -H "X-Admin-Token: dev-admin-token" \
+  -H "Content-Type: application/json" \
+  -X PATCH \
+  -d '{"note_text":"Partially update the local note text."}' \
+  "http://127.0.0.1:8000/admin/notes/1"
+
+curl -H "X-Admin-Token: dev-admin-token" \
+  -X DELETE "http://127.0.0.1:8000/admin/notes/1"
+```
+
+The note table is `application_notes`. It stores local admin metadata only. It does not change `applications` or any MYH source file. The service validates that a `diarienummer` exists before writing or listing notes. `PUT` replaces the note text. `PATCH` supports partial update semantics; because the current model has one editable field, it updates `note_text` when provided and rejects an empty body with `400`.
+
+Auth behavior:
+
+- missing `PART3_ADMIN_TOKEN` on the server: protected admin endpoints return a clear configuration error,
+- missing `X-Admin-Token`: unauthorized,
+- wrong `X-Admin-Token`: forbidden,
+- correct token: the endpoint proceeds to the note operation.
 
 ## Common example requests
 
@@ -434,11 +492,11 @@ python backend/scripts/demo_api.py
 python backend/scripts/demo_api.py --print-only
 ```
 
-The smoke test checks the root endpoint, `/health`, `/health/db`, `/operations/source-status`, refresh, core browsing/statistics/provider/export endpoints, and important guardrails.
+The smoke test checks the root endpoint, `/health`, `/health/db`, `/operations/source-status`, refresh, core browsing/statistics/provider/export endpoints, and important guardrails. Admin-note endpoints are shown in the demo helper but are not required by the smoke test unless you choose to test them manually with `PART3_ADMIN_TOKEN`.
 
-## 3.11 scope boundary
+## 3.12 scope boundary
 
-Implemented in 3.11:
+Implemented by the end of 3.12:
 
 - MYH source-check service,
 - local JSON manifest support,
@@ -447,13 +505,15 @@ Implemented in 3.11:
 - refresh response metadata and optional recent-source-check guardrail,
 - manual `check_source_status.py` script,
 - focused tests for source-check logic and operation routes,
-- README/control-file updates.
+- README/control-file updates,
+- protected admin application notes under `/admin`,
+- `application_notes` local metadata table,
+- admin token dependency using `PART3_ADMIN_TOKEN` and `X-Admin-Token`.
 
-Not implemented in 3.11:
+Still not implemented after 3.12:
 
 - React frontend,
 - ML extension,
-- protected admin write operations,
 - authentication or user accounts,
 - automatic source-file download and curated CSV replacement,
 - production scheduler or background worker,

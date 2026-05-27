@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 
 from pydantic import BaseModel
@@ -180,6 +181,41 @@ class RefreshResult(BaseModel):
     known_latest_source_snapshot: int | None = None
     local_latest_source_year: int | None = None
     source_up_to_date: bool | None = None
+
+
+class ApplicationNoteCreate(BaseModel):
+    """Request body for creating a local admin note."""
+
+    note_text: str
+
+
+class ApplicationNoteUpdate(BaseModel):
+    """Request body for replacing a local admin note."""
+
+    note_text: str
+
+
+class ApplicationNotePatch(BaseModel):
+    """Request body for partially updating a local admin note."""
+
+    note_text: str | None = None
+
+
+class ApplicationNote(BaseModel):
+    """Local protected admin note attached to an application identifier."""
+
+    id: int
+    diarienummer: str
+    note_text: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ApplicationNoteDeleteResult(BaseModel):
+    """Response returned after deleting a local admin note."""
+
+    note_id: int
+    deleted: bool
 
 
 class HealthStatus(BaseModel):

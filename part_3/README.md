@@ -4,7 +4,7 @@
 
 Part 3 turns the curated Part 2 MYH applications dataset into a small internal data service.
 
-The project shows the path from a trusted curated dataset to PostgreSQL storage, a FastAPI API, and a backend structure that can support the remaining portfolio extensions: protected operations, React visualization, and a small explainable ML layer. The implementation stays practical and explainable while using normal professional structure where it solves real project problems.
+The project shows the path from a trusted curated dataset to PostgreSQL storage, a FastAPI API, protected admin metadata operations, and a backend structure that can support the remaining portfolio extensions: React visualization and a small explainable ML layer. The implementation stays practical and explainable while using normal professional structure where it solves real project problems.
 
 ## Source of truth
 
@@ -23,7 +23,9 @@ Main record identifier: diarienummer
 Main grain: one application record per diarienummer
 ```
 
-Sub-project 3.11 adds a controlled MYH source-check foundation. It can inspect the configured official MYH result page, record a local source-status manifest, and help decide whether the local curated CSV may be stale. It does **not** automatically download new Excel files or overwrite the curated dataset.
+Sub-project 3.11 added a controlled MYH source-check foundation. It can inspect the configured official MYH result page, record a local source-status manifest, and help decide whether the local curated CSV may be stale. It does **not** automatically download new Excel files or overwrite the curated dataset.
+
+Sub-project 3.12 adds a protected admin write use case: local application notes stored in a separate metadata table. Admin notes do **not** modify the curated MYH source data and require a configured `PART3_ADMIN_TOKEN` sent as `X-Admin-Token`.
 
 ## Implementation principles
 
@@ -36,11 +38,11 @@ Sub-project 3.11 adds a controlled MYH source-check foundation. It can inspect t
 - Add structure only when it improves maintainability, validation, operations, or later roadmap work.
 - Keep generated runtime files and internal handoff/control files outside Git tracking.
 
-## Current backend shape after Sub-project 3.11
+## Current backend shape after Sub-project 3.12
 
 Sub-project 3.10 reorganized the backend into routers and services, added database readiness checks, logging, centralized database-error handling, and focused pytest coverage.
 
-Sub-project 3.11 added a modest scheduled-source-check foundation and refresh metadata upgrade.
+Sub-project 3.11 added a modest scheduled-source-check foundation and refresh metadata upgrade. Sub-project 3.12 added protected admin notes as a safe write-side use case.
 
 ```text
 part_3/
@@ -58,8 +60,10 @@ part_3/
       main.py
       queries.py                 # compatibility exports for older imports
       schemas.py
+      security.py                # simple PART3_ADMIN_TOKEN / X-Admin-Token dependency
       routers/
         __init__.py
+        admin.py                 # protected application-note endpoints
         applications.py
         export.py
         health.py
@@ -68,6 +72,7 @@ part_3/
         stats.py
       services/
         __init__.py
+        admin_notes.py            # local admin-note storage service
         applications.py
         common.py
         export.py
@@ -87,6 +92,9 @@ part_3/
       schema.sql
       indexes.sql
     tests/
+      test_admin_auth.py
+      test_admin_notes_service.py
+      test_admin_routes.py
       test_check_source_status_script.py
       test_filter_helpers.py
       test_health_service.py
@@ -102,7 +110,7 @@ part_3/
 
 The database is normalized enough to support useful API queries without becoming difficult to explain.
 
-Core tables:
+Core curated-data tables:
 
 ```text
 applications
@@ -114,7 +122,13 @@ principal_types
 study_forms
 ```
 
-The `applications` table remains the central table. Repeated high-value fields such as provider, education area, location, decision, principal type, and study form are represented through lookup tables.
+Local admin metadata table:
+
+```text
+application_notes
+```
+
+The `applications` table remains the central curated-data table. Repeated high-value fields such as provider, education area, location, decision, principal type, and study form are represented through lookup tables. The `application_notes` table is separate local metadata for protected admin use and does not overwrite source data.
 
 Traceability fields from the curated dataset are preserved:
 
@@ -132,6 +146,7 @@ The API reads from PostgreSQL and provides:
 
 - service and database readiness checks,
 - MYH source-check status and manual source-check operation,
+- protected admin notes attached to applications,
 - record access,
 - filtered and paginated browsing,
 - grouped statistics,
@@ -148,6 +163,11 @@ GET  /health
 GET  /health/db
 GET  /operations/source-status
 POST /operations/check-source
+GET  /admin/applications/{diarienummer}/notes
+POST /admin/applications/{diarienummer}/notes
+PUT  /admin/notes/{note_id}
+PATCH /admin/notes/{note_id}
+DELETE /admin/notes/{note_id}
 GET  /applications
 GET  /applications/{diarienummer}
 GET  /stats/by-year
@@ -231,6 +251,68 @@ Generated source manifests are local runtime files and should not be committed:
 ```text
 backend/runtime/source_status.json
 ```
+
+## Protected admin application notes
+
+Sub-project 3.12 adds one small write-side feature under `/admin`: local notes linked to application `diarienummer` values. Public read endpoints remain public. Admin note text is only available through protected `/admin` endpoints.
+
+Configuration:
+
+```text
+PART3_ADMIN_TOKEN=<your-local-token>
+```
+
+Protected requests must include:
+
+```text
+X-Admin-Token: <your-local-token>
+```
+
+Admin note endpoints:
+
+```text
+GET    /admin/applications/{diarienummer}/notes
+POST   /admin/applications/{diarienummer}/notes
+PUT    /admin/notes/{note_id}
+PATCH  /admin/notes/{note_id}
+DELETE /admin/notes/{note_id}
+```
+
+`PUT` replaces the note text with the submitted full value. `PATCH` supports a partial update request; in the current simple note model, `note_text` is the only editable field, so an empty PATCH body returns a clear `400`.
+
+Example calls, with URL-encoded `diarienummer` when it contains spaces or slashes:
+
+```bash
+curl -H "X-Admin-Token: <your-local-token>" \
+  "http://127.0.0.1:8000/admin/applications/MYH%202024%2F1/notes"
+
+curl -H "X-Admin-Token: <your-local-token>" \
+  -H "Content-Type: application/json" \
+  -X POST \
+  -d '{"note_text":"Check this application before the demo."}' \
+  "http://127.0.0.1:8000/admin/applications/MYH%202024%2F1/notes"
+
+curl -H "X-Admin-Token: <your-local-token>" \
+  -H "Content-Type: application/json" \
+  -X PUT \
+  -d '{"note_text":"Replace the local note text."}' \
+  "http://127.0.0.1:8000/admin/notes/1"
+
+curl -H "X-Admin-Token: <your-local-token>" \
+  -H "Content-Type: application/json" \
+  -X PATCH \
+  -d '{"note_text":"Partially update the local note text."}' \
+  "http://127.0.0.1:8000/admin/notes/1"
+```
+
+Safety boundaries:
+
+- the curated `applications` table is not overwritten by admin notes,
+- notes are stored in the separate `application_notes` table,
+- the service validates that an application exists before creating or listing notes,
+- missing or wrong request tokens return clear auth errors,
+- a missing server token returns a clear configuration error,
+- there are no users, login pages, sessions, OAuth flows, or passwords.
 
 ## Filters and exports
 
@@ -355,6 +437,7 @@ http://127.0.0.1:8000/
 http://127.0.0.1:8000/health
 http://127.0.0.1:8000/health/db
 http://127.0.0.1:8000/operations/source-status
+http://127.0.0.1:8000/admin/applications/{diarienummer}/notes
 http://127.0.0.1:8000/docs
 ```
 
@@ -377,7 +460,7 @@ To include the operational refresh call in the demo sequence:
 python backend/scripts/demo_api.py --include-refresh
 ```
 
-## Expanded roadmap after 3.11
+## Expanded roadmap after 3.12
 
 The assignment remains the baseline for required deliverables, but the assessor has allowed stronger additions when they remain explainable at vocational/YH-student level and improve the final project/demo value.
 
@@ -386,8 +469,8 @@ Current roadmap:
 ```text
 3.10 Backend Structure and Robustness Foundation — completed
 3.11 Scheduled MYH Source Check and Refresh Upgrade — completed
-3.12 Protected Admin Operations and Safe Write Use Case — next
-3.13 React + TypeScript Visualization and Trend Dashboard
+3.12 Protected Admin Operations and Safe Write Use Case — completed
+3.13 React + TypeScript Visualization and Trend Dashboard — next
 3.14 Small Explainable ML Extension
 3.15 Final Integration, Presentation Update, and Submission Cleanup
 ```
@@ -398,7 +481,7 @@ Guiding rule:
 Vocational level means explainable and proportionate, not toy-like or artificially weak. Use normal professional structure when it improves correctness, maintainability, robustness, operations, or presentation value.
 ```
 
-No React frontend, ML module, or protected admin write operation is implemented in 3.11.
+No React frontend or ML module is implemented in 3.12. Protected admin notes are implemented with create, list, replace, partial update, and delete operations, but full user accounts, login flows, and complex authorization remain intentionally excluded.
 
 ## Git policy
 
