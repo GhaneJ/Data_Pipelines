@@ -28,6 +28,55 @@ export interface DatabaseHealth {
   lookup_tables: TableRowHealth[];
 }
 
+export interface YearStats {
+  source_year: number;
+  total_applications: number;
+  approved_applications: number;
+  rejected_applications: number;
+  withdrawn_applications: number;
+  approval_rate_percent: number;
+}
+
+export interface RegionStats {
+  lan: string;
+  total_applications: number;
+  approved_applications: number;
+  rejected_applications: number;
+  withdrawn_applications: number;
+  approval_rate_percent: number;
+}
+
+export interface EducationAreaStats {
+  education_area_id: number;
+  utbildningsomrade: string;
+  total_applications: number;
+  approved_applications: number;
+  rejected_applications: number;
+  withdrawn_applications: number;
+  approval_rate_percent: number;
+}
+
+export interface DecisionStats {
+  decision_code: "approved" | "rejected" | "withdrawn" | string;
+  decision_label: string;
+  total_applications: number;
+  application_share_percent: number;
+}
+
+export interface DecisionTrend {
+  source_year: number;
+  decision_code: string;
+  decision_label: string;
+  application_count: number;
+}
+
+export interface EducationAreaTrend {
+  source_year: number;
+  education_area_id: number;
+  utbildningsomrade: string;
+  application_count: number;
+}
+
 export class ApiError extends Error {
   status: number | null;
 
@@ -88,4 +137,28 @@ export function getHealth(): Promise<HealthStatus> {
 
 export function getDatabaseHealth(): Promise<DatabaseHealth> {
   return requestJson<DatabaseHealth>("/health/db");
+}
+
+export function getStatsByYear(): Promise<YearStats[]> {
+  return requestJson<YearStats[]>("/stats/by-year");
+}
+
+export function getStatsByDecision(): Promise<DecisionStats[]> {
+  return requestJson<DecisionStats[]>("/stats/by-decision");
+}
+
+export function getStatsByRegion(): Promise<RegionStats[]> {
+  return requestJson<RegionStats[]>("/stats/by-region");
+}
+
+export function getStatsByEducationArea(): Promise<EducationAreaStats[]> {
+  return requestJson<EducationAreaStats[]>("/stats/by-education-area");
+}
+
+export function getTrendByDecision(params: { year_from?: number; year_to?: number } = {}): Promise<DecisionTrend[]> {
+  return requestJson<DecisionTrend[]>("/stats/trends/by-decision", params);
+}
+
+export function getTrendByEducationArea(params: { year_from?: number; year_to?: number; limit?: number } = {}): Promise<EducationAreaTrend[]> {
+  return requestJson<EducationAreaTrend[]>("/stats/trends/by-education-area", params);
 }
