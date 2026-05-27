@@ -4,6 +4,9 @@ import type { ApiStatus, ApplicationFilters, ApplicationList, ApplicationRecord 
 import { ApplicationDetailPanel } from "./ApplicationDetailPanel";
 import { StateMessage } from "./StateMessage";
 
+const DEFAULT_PAGE_SIZE = 25;
+const PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
+
 const DEFAULT_FILTERS: ApplicationFilters = {
   source_year: "",
   decision: "",
@@ -12,16 +15,18 @@ const DEFAULT_FILTERS: ApplicationFilters = {
   provider: "",
   education_area: "",
   study_form: "",
-  limit: 25,
+  limit: DEFAULT_PAGE_SIZE,
   offset: 0,
 };
 
-function normalizeFilters(filters: ApplicationFilters): ApplicationFilters {
+function normalizeFilters(filters: ApplicationFilters, offset = 0): ApplicationFilters {
+  const limit = filters.limit ?? DEFAULT_PAGE_SIZE;
+
   return {
     ...filters,
     source_year: filters.source_year === "" ? undefined : filters.source_year,
-    limit: 25,
-    offset: 0,
+    limit,
+    offset,
   };
 }
 
@@ -101,10 +106,21 @@ export function ApplicationsBrowser() {
   }, [selectedDiarienummer]);
 
   const rows = applicationList?.items ?? [];
+  const currentLimit = appliedFilters.limit ?? DEFAULT_PAGE_SIZE;
+  const currentOffset = applicationList?.offset ?? appliedFilters.offset ?? 0;
+  const totalApplications = applicationList?.total ?? 0;
+  const currentPage = totalApplications === 0 ? 0 : Math.floor(currentOffset / currentLimit) + 1;
+  const totalPages = totalApplications === 0 ? 0 : Math.ceil(totalApplications / currentLimit);
+  const firstShown = totalApplications === 0 ? 0 : currentOffset + 1;
+  const lastShown = applicationList ? Math.min(currentOffset + rows.length, totalApplications) : 0;
+  const canGoPrevious = currentOffset > 0 && listStatus !== "loading";
+  const canGoNext = currentOffset + currentLimit < totalApplications && listStatus !== "loading";
+
   const totalText = useMemo(() => {
     if (!applicationList) return "No page loaded yet";
-    return `${rows.length.toLocaleString("sv-SE")} shown of ${applicationList.total.toLocaleString("sv-SE")} matching applications`;
-  }, [applicationList, rows.length]);
+    if (totalApplications === 0) return "No matching applications";
+    return `${firstShown.toLocaleString("sv-SE")}–${lastShown.toLocaleString("sv-SE")} shown of ${totalApplications.toLocaleString("sv-SE")} matching applications`;
+  }, [applicationList, firstShown, lastShown, totalApplications]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -117,6 +133,17 @@ export function ApplicationsBrowser() {
     setSelectedDiarienummer(null);
   }
 
+  function goToPage(offset: number) {
+    const safeOffset = Math.max(0, offset);
+    setAppliedFilters((current) => normalizeFilters(current, safeOffset));
+  }
+
+  function handleLimitChange(limit: number) {
+    const nextFilters = { ...filters, limit };
+    setFilters(nextFilters);
+    setAppliedFilters(normalizeFilters(nextFilters));
+  }
+
   return (
     <section className="dashboard-section" aria-labelledby="applications-browser-title">
       <div className="section-heading">
@@ -124,7 +151,7 @@ export function ApplicationsBrowser() {
           <p className="eyebrow">Browse records</p>
           <h2 id="applications-browser-title">Filterable applications</h2>
         </div>
-        <p className="muted">A bounded 25-row browser using /applications and /applications/{"{diarienummer}"}.</p>
+        <p className="muted">A bounded paginated browser using /applications limit/offset and /applications/{"{diarienummer}"}.</p>
       </div>
 
       <div className="browser-layout">
@@ -214,7 +241,39 @@ export function ApplicationsBrowser() {
 
           <div className="table-meta">
             <strong>{totalText}</strong>
-            <span>Limit: 25 rows</span>
+            <div className="pagination-controls" aria-label="Applications pagination controls">
+              <label>
+                <span>Rows</span>
+                <select
+                  value={currentLimit}
+                  onChange={(event) => handleLimitChange(Number(event.target.value))}
+                  aria-label="Rows per page"
+                >
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <option value={size} key={size}>{size}</option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="secondary-button compact-button"
+                onClick={() => goToPage(currentOffset - currentLimit)}
+                disabled={!canGoPrevious}
+              >
+                Previous
+              </button>
+              <span className="page-count">
+                Page {currentPage.toLocaleString("sv-SE")} of {totalPages.toLocaleString("sv-SE")}
+              </span>
+              <button
+                type="button"
+                className="secondary-button compact-button"
+                onClick={() => goToPage(currentOffset + currentLimit)}
+                disabled={!canGoNext}
+              >
+                Next
+              </button>
+            </div>
           </div>
 
           <StateMessage

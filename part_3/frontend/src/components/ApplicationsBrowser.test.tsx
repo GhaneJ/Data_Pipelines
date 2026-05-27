@@ -44,19 +44,22 @@ beforeEach(() => {
   vi.restoreAllMocks();
 });
 
-test("renders applications, applies filters, and loads a detail view", async () => {
+test("renders applications, applies filters, paginates, and loads a detail view", async () => {
   const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = String(input);
     if (url.includes("/applications/MYH%202024%2F1")) {
       return jsonResponse(application);
     }
-    return jsonResponse({ total: 1, limit: 25, offset: 0, items: [application] });
+
+    const offset = new URL(url).searchParams.get("offset") ?? "0";
+    return jsonResponse({ total: 40, limit: 25, offset: Number(offset), items: [application] });
   });
 
   render(<ApplicationsBrowser />);
 
   await waitFor(() => expect(screen.getAllByText("Data Engineer").length).toBeGreaterThan(0));
   await waitFor(() => expect(screen.getAllByText("Example Provider").length).toBeGreaterThan(0));
+  expect(screen.getByText(/1–1 shown of 40/i)).toBeInTheDocument();
 
   await userEvent.selectOptions(screen.getByLabelText(/Year/i), "2024");
   await userEvent.selectOptions(screen.getByLabelText(/Decision/i), "approved");
@@ -64,6 +67,10 @@ test("renders applications, applies filters, and loads a detail view", async () 
 
   await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("source_year=2024"), expect.any(Object)));
   expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("decision=approved"), expect.any(Object));
+
+  await userEvent.click(screen.getByRole("button", { name: /Next/i }));
+
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("offset=25"), expect.any(Object)));
 });
 
 test("renders empty application state", async () => {

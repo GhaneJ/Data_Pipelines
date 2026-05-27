@@ -566,3 +566,58 @@ tbody tr:hover,
 .browser-card {
   border-top: 4px solid rgba(63, 111, 168, 0.38);
 }
+
+.pagination-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.pagination-controls label {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.pagination-controls select {
+  min-width: 5rem;
+  border: 1px solid rgba(100, 116, 139, 0.28);
+  border-radius: 999px;
+  background: #fff;
+  padding: 0.52rem 0.75rem;
+  color: var(--ink);
+}
+
+.compact-button {
+  padding: 0.6rem 0.9rem;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  filter: none;
+  opacity: 0.45;
+}
+
+.page-count {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .pagination-controls {
+    align-items: stretch;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+
+  .pagination-controls label {
+    justify-content: space-between;
+  }
+}
