@@ -16,6 +16,7 @@ REQUIRED_TABLES = (
     "locations",
     "principal_types",
     "study_forms",
+    "application_notes",
 )
 
 LOOKUP_TABLES = (

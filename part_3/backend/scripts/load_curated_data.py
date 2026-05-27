@@ -1,8 +1,8 @@
 """Load the curated MYH applications CSV into PostgreSQL.
 
 The curated CSV from Part 2 is the source of truth. This script keeps the load
-process simple: create the schema, insert lookup rows, then insert one
-application row per diarienummer.
+process explicit: reset curated-data tables, create the safe schema, insert
+lookup rows, then insert one application row per diarienummer.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ import psycopg
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_RESET_SCHEMA_PATH = BACKEND_ROOT / "sql" / "reset_schema.sql"
 DEFAULT_SCHEMA_PATH = BACKEND_ROOT / "sql" / "schema.sql"
 DEFAULT_INDEXES_PATH = BACKEND_ROOT / "sql" / "indexes.sql"
 DEFAULT_CSV_NAME = "myh_curated_applications_2020_2025.csv"
@@ -146,10 +147,16 @@ def parse_args() -> argparse.Namespace:
         help="PostgreSQL connection URL. Can also be supplied through DATABASE_URL.",
     )
     parser.add_argument(
+        "--reset-schema-path",
+        type=Path,
+        default=DEFAULT_RESET_SCHEMA_PATH,
+        help="Path to reset_schema.sql. Used only for explicit full reloads.",
+    )
+    parser.add_argument(
         "--schema-path",
         type=Path,
         default=DEFAULT_SCHEMA_PATH,
-        help="Path to schema.sql.",
+        help="Path to safe schema.sql.",
     )
     parser.add_argument(
         "--indexes-path",
@@ -160,7 +167,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--skip-schema",
         action="store_true",
-        help="Skip running schema.sql and indexes.sql before loading data.",
+        help="Skip reset_schema.sql, schema.sql, and indexes.sql before loading data.",
     )
     return parser.parse_args()
 
@@ -451,6 +458,7 @@ def format_source_path(csv_path: Path) -> str:
 def refresh_applications_database(
     csv_path: Path | None = None,
     database_url: str | None = None,
+    reset_schema_path: Path = DEFAULT_RESET_SCHEMA_PATH,
     schema_path: Path = DEFAULT_SCHEMA_PATH,
     indexes_path: Path = DEFAULT_INDEXES_PATH,
     source_check_metadata: dict[str, str | int | bool | None] | None = None,
@@ -465,6 +473,7 @@ def refresh_applications_database(
     validate_source_rows(rows)
 
     with psycopg.connect(database_url) as conn:
+        run_sql_file(conn, reset_schema_path)
         run_sql_file(conn, schema_path)
         run_sql_file(conn, indexes_path)
         insert_lookup_rows(conn, rows)
@@ -501,6 +510,7 @@ def main() -> None:
     summary = refresh_applications_database(
         csv_path=args.csv_path,
         database_url=args.database_url,
+        reset_schema_path=args.reset_schema_path,
         schema_path=args.schema_path,
         indexes_path=args.indexes_path,
     )
