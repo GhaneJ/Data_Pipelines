@@ -1,52 +1,44 @@
--- PostgreSQL schema for the curated MYH applications dataset.
+-- Safe PostgreSQL schema for the curated MYH applications database.
 --
--- This schema is intentionally normalized, but still small enough to explain.
--- The curated CSV remains the source of truth; this SQL only defines how the
--- finished Part 2 dataset is stored for Part 3.
+-- This file is the single source of truth for project-managed table
+-- definitions. It is safe to run during FastAPI startup because it only uses
+-- CREATE TABLE IF NOT EXISTS and never resets existing data.
 
-DROP TABLE IF EXISTS applications CASCADE;
-DROP TABLE IF EXISTS providers CASCADE;
-DROP TABLE IF EXISTS education_areas CASCADE;
-DROP TABLE IF EXISTS locations CASCADE;
-DROP TABLE IF EXISTS decisions CASCADE;
-DROP TABLE IF EXISTS principal_types CASCADE;
-DROP TABLE IF EXISTS study_forms CASCADE;
-
-CREATE TABLE decisions (
+CREATE TABLE IF NOT EXISTS decisions (
     decision_code TEXT PRIMARY KEY,
     decision_label TEXT NOT NULL UNIQUE,
     CONSTRAINT decisions_code_check CHECK (decision_code IN ('approved', 'rejected', 'withdrawn'))
 );
 
-CREATE TABLE providers (
+CREATE TABLE IF NOT EXISTS providers (
     provider_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     utbildningsanordnare TEXT NOT NULL UNIQUE
 );
 
-CREATE TABLE education_areas (
+CREATE TABLE IF NOT EXISTS education_areas (
     education_area_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     utbildningsomrade TEXT NOT NULL UNIQUE
 );
 
-CREATE TABLE locations (
+CREATE TABLE IF NOT EXISTS locations (
     location_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     lan TEXT NOT NULL,
     kommun TEXT NOT NULL,
     CONSTRAINT locations_lan_kommun_unique UNIQUE (lan, kommun)
 );
 
-CREATE TABLE principal_types (
+CREATE TABLE IF NOT EXISTS principal_types (
     principal_type_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     huvudmannatyp TEXT NOT NULL UNIQUE,
     huvudmannatyp_normalized TEXT NOT NULL
 );
 
-CREATE TABLE study_forms (
+CREATE TABLE IF NOT EXISTS study_forms (
     study_form_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     studieform TEXT NOT NULL UNIQUE
 );
 
-CREATE TABLE applications (
+CREATE TABLE IF NOT EXISTS applications (
     -- Natural application identifier from the curated MYH dataset.
     diarienummer TEXT PRIMARY KEY,
 
@@ -101,7 +93,7 @@ CREATE TABLE applications (
 -- Local admin metadata is deliberately separate from curated MYH source data.
 -- The service validates diarienummer against applications before writing notes.
 -- No foreign key is used here so a full curated-data refresh does not
--- automatically delete local admin notes.
+-- automatically remove local admin notes.
 CREATE TABLE IF NOT EXISTS application_notes (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     diarienummer TEXT NOT NULL,

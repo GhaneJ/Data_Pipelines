@@ -9,22 +9,6 @@ import psycopg
 
 MAX_NOTE_TEXT_LENGTH = 2000
 
-APPLICATION_NOTES_SCHEMA_SQL = """
-CREATE TABLE IF NOT EXISTS application_notes (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    diarienummer TEXT NOT NULL,
-    note_text TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT application_notes_diarienummer_not_blank CHECK (btrim(diarienummer) <> ''),
-    CONSTRAINT application_notes_note_text_not_blank CHECK (btrim(note_text) <> '')
-);
-"""
-
-APPLICATION_NOTES_INDEX_SQL = """
-CREATE INDEX IF NOT EXISTS idx_application_notes_diarienummer
-    ON application_notes (diarienummer);
-"""
 
 APPLICATION_NOTE_SELECT_SQL = """
 SELECT
@@ -47,12 +31,6 @@ def normalize_note_text(note_text: str) -> str:
     return cleaned
 
 
-def ensure_application_notes_table(conn: psycopg.Connection[dict[str, Any]]) -> None:
-    """Create the local admin metadata table if the database predates 3.12."""
-    with conn.cursor() as cursor:
-        cursor.execute(APPLICATION_NOTES_SCHEMA_SQL)
-        cursor.execute(APPLICATION_NOTES_INDEX_SQL)
-
 
 def application_exists(conn: psycopg.Connection[dict[str, Any]], diarienummer: str) -> bool:
     """Return whether the curated applications table contains this diarienummer."""
@@ -67,7 +45,6 @@ def list_application_notes(
     diarienummer: str,
 ) -> list[dict[str, Any]] | None:
     """Return notes for one existing application, or None if the application is missing."""
-    ensure_application_notes_table(conn)
     if not application_exists(conn, diarienummer):
         return None
 
@@ -87,7 +64,6 @@ def create_application_note(
     note_text: str,
 ) -> dict[str, Any] | None:
     """Create one note for an existing application, or None if the application is missing."""
-    ensure_application_notes_table(conn)
     if not application_exists(conn, diarienummer):
         return None
 
@@ -108,7 +84,6 @@ def update_application_note(
     note_text: str,
 ) -> dict[str, Any] | None:
     """Update one existing note and return it, or None if the note is missing."""
-    ensure_application_notes_table(conn)
     cleaned_note = normalize_note_text(note_text)
     sql = f"""
 UPDATE application_notes
@@ -124,7 +99,6 @@ RETURNING id, diarienummer, note_text, created_at, updated_at;
 
 def delete_application_note(conn: psycopg.Connection[dict[str, Any]], note_id: int) -> bool:
     """Delete one existing note and report whether anything was removed."""
-    ensure_application_notes_table(conn)
     with conn.cursor() as cursor:
         cursor.execute("DELETE FROM application_notes WHERE id = %(note_id)s RETURNING id;", {"note_id": note_id})
         return cursor.fetchone() is not None

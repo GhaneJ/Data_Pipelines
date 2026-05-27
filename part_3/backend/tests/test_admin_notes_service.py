@@ -79,7 +79,7 @@ def test_create_application_note_validates_application_before_insert() -> None:
     assert note is not None
     assert note["note_text"] == "Follow up"
     combined_sql = "\n".join(sql for sql, _ in conn.executed)
-    assert "CREATE TABLE IF NOT EXISTS application_notes" in combined_sql
+    assert "CREATE TABLE IF NOT EXISTS application_notes" not in combined_sql
     assert "SELECT EXISTS" in combined_sql
     assert "INSERT INTO application_notes" in combined_sql
     assert conn.executed[-1][1]["note_text"] == "Follow up"

@@ -29,7 +29,7 @@ def test_source_status_route_returns_manifest_payload(monkeypatch) -> None:
         },
     )
 
-    client = TestClient(create_app())
+    client = TestClient(create_app(run_startup_seeder=False))
     response = client.get("/operations/source-status")
 
     assert response.status_code == 200
@@ -57,7 +57,7 @@ def test_check_source_route_uses_service(monkeypatch) -> None:
         },
     )
 
-    client = TestClient(create_app())
+    client = TestClient(create_app(run_startup_seeder=False))
     response = client.post("/operations/check-source")
 
     assert response.status_code == 200
@@ -85,7 +85,7 @@ def test_refresh_can_require_recent_source_check(monkeypatch) -> None:
         },
     )
 
-    client = TestClient(create_app())
+    client = TestClient(create_app(run_startup_seeder=False))
     response = client.post("/refresh?require_recent_source_check=true")
 
     assert response.status_code == 400
