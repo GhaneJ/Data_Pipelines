@@ -5,7 +5,17 @@ from __future__ import annotations
 import csv
 import io
 
-from backend.app.schemas import DatabaseHealth, HealthStatus, RefreshResult, SourceCheckResult
+from backend.app.schemas import (
+    ApplicationNote,
+    ApplicationNoteCreate,
+    ApplicationNoteDeleteResult,
+    ApplicationNotePatch,
+    ApplicationNoteUpdate,
+    DatabaseHealth,
+    HealthStatus,
+    RefreshResult,
+    SourceCheckResult,
+)
 from backend.app.services.export import rows_to_csv
 
 
@@ -102,3 +112,25 @@ def test_rows_to_csv_uses_stable_export_columns() -> None:
     assert rows[0]["diarienummer"] == "MYH 2024/1"
     assert "ignored_extra_field" not in rows[0]
     assert "beviljade_platser_totalt" in rows[0]
+
+
+def test_application_note_schemas() -> None:
+    """Admin-note schemas should keep the protected write payload simple."""
+    create_payload = ApplicationNoteCreate(note_text="Check before demo.")
+    update_payload = ApplicationNoteUpdate(note_text="Replace note before demo.")
+    patch_payload = ApplicationNotePatch(note_text="Patch note before demo.")
+    empty_patch_payload = ApplicationNotePatch()
+    note = ApplicationNote(
+        id=1,
+        diarienummer="MYH 2024/1",
+        note_text=create_payload.note_text,
+        created_at="2026-05-27T10:00:00+00:00",
+        updated_at="2026-05-27T10:00:00+00:00",
+    )
+    delete_result = ApplicationNoteDeleteResult(note_id=note.id, deleted=True)
+
+    assert note.diarienummer == "MYH 2024/1"
+    assert update_payload.note_text == "Replace note before demo."
+    assert patch_payload.note_text == "Patch note before demo."
+    assert empty_patch_payload.note_text is None
+    assert delete_result.model_dump() == {"note_id": 1, "deleted": True}

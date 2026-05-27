@@ -112,6 +112,27 @@ def main() -> None:
             call_by_default=False,
         ),
         DemoStep(
+            "Protected admin notes",
+            "POST",
+            "/admin/applications/{diarienummer}/notes",
+            "Creates local admin metadata for one application using X-Admin-Token; not called by default.",
+            call_by_default=False,
+        ),
+        DemoStep(
+            "Protected admin note list",
+            "GET",
+            "/admin/applications/{diarienummer}/notes",
+            "Reads local admin notes using X-Admin-Token; note text remains under protected /admin routes.",
+            call_by_default=False,
+        ),
+        DemoStep(
+            "Protected admin note patch",
+            "PATCH",
+            "/admin/notes/{note_id}",
+            "Partially updates local admin-note metadata using X-Admin-Token; not called by default.",
+            call_by_default=False,
+        ),
+        DemoStep(
             "Filtered application browsing",
             "GET",
             "/applications?" + urlencode({"source_year": 2024, "decision": "approved", "limit": 3}),
@@ -172,6 +193,8 @@ def main() -> None:
                 extra = "open in browser"
             elif step.title == "Manual source check":
                 extra = "not called by default; run from /docs or use the check_source_status.py script"
+            elif step.title in {"Protected admin notes", "Protected admin note list", "Protected admin note patch"}:
+                extra = "not called by default; set PART3_ADMIN_TOKEN and send X-Admin-Token to test it from /docs or curl"
             elif step.title == "Operational refresh" and not args.include_refresh:
                 extra = "not called by default; add --include-refresh to run it"
             print_step(index, step, url, extra)

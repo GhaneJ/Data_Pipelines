@@ -45,6 +45,8 @@ def test_expected_routes_are_registered() -> None:
         "/operations/source-status",
         "/operations/check-source",
         "/refresh",
+        "/admin/applications/{diarienummer:path}/notes",
+        "/admin/notes/{note_id}",
     }
 
     assert expected_paths.issubset(paths)
