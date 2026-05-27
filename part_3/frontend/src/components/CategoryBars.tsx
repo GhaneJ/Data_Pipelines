@@ -7,8 +7,8 @@ interface CategoryBarsProps {
 }
 
 export function CategoryBars({ regions, educationAreas }: CategoryBarsProps) {
-  const topRegions = regions.slice(0, 8).map((row) => ({ name: row.lan, applications: row.total_applications }));
-  const topEducationAreas = educationAreas.slice(0, 8).map((row) => ({
+  const topRegions = regions.slice(0, 6).map((row) => ({ name: row.lan, applications: row.total_applications }));
+  const topEducationAreas = educationAreas.slice(0, 6).map((row) => ({
     name: row.utbildningsomrade,
     applications: row.total_applications,
   }));
@@ -24,13 +24,13 @@ export function CategoryBars({ regions, educationAreas }: CategoryBarsProps) {
           <p className="muted">Uses /stats/by-region.</p>
         </div>
         <div className="chart-frame" aria-label="Top regions chart">
-          <ResponsiveContainer width="100%" height={310}>
-            <BarChart data={topRegions} layout="vertical" margin={{ top: 8, right: 16, left: 42, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" />
+          <ResponsiveContainer width="100%" height={360}>
+            <BarChart data={topRegions} layout="vertical" margin={{ top: 12, right: 24, left: 56, bottom: 12 }}>
+              <CartesianGrid stroke="#dbe3ec" strokeDasharray="3 3" />
               <XAxis type="number" />
-              <YAxis dataKey="name" type="category" width={120} />
+              <YAxis dataKey="name" type="category" width={140} />
               <Tooltip />
-              <Bar dataKey="applications" name="Applications" radius={[0, 8, 8, 0]} />
+              <Bar dataKey="applications" name="Applications" fill="#2f7d76" radius={[0, 8, 8, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -45,13 +45,13 @@ export function CategoryBars({ regions, educationAreas }: CategoryBarsProps) {
           <p className="muted">Uses /stats/by-education-area.</p>
         </div>
         <div className="chart-frame" aria-label="Top education areas chart">
-          <ResponsiveContainer width="100%" height={310}>
-            <BarChart data={topEducationAreas} layout="vertical" margin={{ top: 8, right: 16, left: 80, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" />
+          <ResponsiveContainer width="100%" height={360}>
+            <BarChart data={topEducationAreas} layout="vertical" margin={{ top: 12, right: 24, left: 96, bottom: 12 }}>
+              <CartesianGrid stroke="#dbe3ec" strokeDasharray="3 3" />
               <XAxis type="number" />
-              <YAxis dataKey="name" type="category" width={160} />
+              <YAxis dataKey="name" type="category" width={190} />
               <Tooltip />
-              <Bar dataKey="applications" name="Applications" radius={[0, 8, 8, 0]} />
+              <Bar dataKey="applications" name="Applications" fill="#3f6fa8" radius={[0, 8, 8, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

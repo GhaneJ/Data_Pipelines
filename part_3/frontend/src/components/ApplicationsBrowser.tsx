@@ -165,7 +165,7 @@ export function ApplicationsBrowser() {
               <span>Region/län</span>
               <input
                 value={filters.region ?? ""}
-                placeholder="Stockholm"
+                placeholder="Type län..."
                 onChange={(event) => setFilters((current) => ({ ...current, region: event.target.value }))}
               />
             </label>
@@ -174,7 +174,7 @@ export function ApplicationsBrowser() {
               <span>Municipality</span>
               <input
                 value={filters.municipality ?? ""}
-                placeholder="Göteborg"
+                placeholder="Type municipality..."
                 onChange={(event) => setFilters((current) => ({ ...current, municipality: event.target.value }))}
               />
             </label>
@@ -183,7 +183,7 @@ export function ApplicationsBrowser() {
               <span>Provider</span>
               <input
                 value={filters.provider ?? ""}
-                placeholder="Yrkeshögskola"
+                placeholder="Type provider..."
                 onChange={(event) => setFilters((current) => ({ ...current, provider: event.target.value }))}
               />
             </label>
@@ -192,7 +192,7 @@ export function ApplicationsBrowser() {
               <span>Education area</span>
               <input
                 value={filters.education_area ?? ""}
-                placeholder="Data/IT"
+                placeholder="Type education area..."
                 onChange={(event) => setFilters((current) => ({ ...current, education_area: event.target.value }))}
               />
             </label>
@@ -201,7 +201,7 @@ export function ApplicationsBrowser() {
               <span>Study form</span>
               <input
                 value={filters.study_form ?? ""}
-                placeholder="Distans"
+                placeholder="Type study form..."
                 onChange={(event) => setFilters((current) => ({ ...current, study_form: event.target.value }))}
               />
             </label>
