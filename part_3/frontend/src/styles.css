@@ -414,14 +414,19 @@ button:hover {
 }
 
 .table-meta {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
   gap: 1.25rem;
   align-items: center;
-  justify-content: space-between;
   border-radius: 1rem;
   background: #f8fafc;
   padding: 0.95rem 1.1rem;
   color: #475569;
+}
+
+.table-meta > strong {
+  min-width: 0;
+  line-height: 1.35;
 }
 
 .table-wrap {
@@ -569,10 +574,11 @@ tbody tr:hover,
 
 .pagination-controls {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.7rem;
   align-items: center;
   justify-content: flex-end;
+  white-space: nowrap;
 }
 
 .pagination-controls label {
@@ -608,6 +614,18 @@ button:disabled {
   font-size: 0.9rem;
   font-weight: 800;
   white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .table-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .pagination-controls {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    white-space: normal;
+  }
 }
 
 @media (max-width: 640px) {

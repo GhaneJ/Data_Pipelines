@@ -59,7 +59,7 @@ test("renders applications, applies filters, paginates, and loads a detail view"
 
   await waitFor(() => expect(screen.getAllByText("Data Engineer").length).toBeGreaterThan(0));
   await waitFor(() => expect(screen.getAllByText("Example Provider").length).toBeGreaterThan(0));
-  expect(screen.getByText(/1–1 shown of 40/i)).toBeInTheDocument();
+  expect(screen.getByText(/Showing 1–1 of 40/i)).toBeInTheDocument();
 
   await userEvent.selectOptions(screen.getByLabelText(/Year/i), "2024");
   await userEvent.selectOptions(screen.getByLabelText(/Decision/i), "approved");

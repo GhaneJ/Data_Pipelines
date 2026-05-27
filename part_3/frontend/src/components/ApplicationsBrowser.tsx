@@ -119,7 +119,7 @@ export function ApplicationsBrowser() {
   const totalText = useMemo(() => {
     if (!applicationList) return "No page loaded yet";
     if (totalApplications === 0) return "No matching applications";
-    return `${firstShown.toLocaleString("sv-SE")}–${lastShown.toLocaleString("sv-SE")} shown of ${totalApplications.toLocaleString("sv-SE")} matching applications`;
+    return `Showing ${firstShown.toLocaleString("sv-SE")}–${lastShown.toLocaleString("sv-SE")} of ${totalApplications.toLocaleString("sv-SE")} matching applications`;
   }, [applicationList, firstShown, lastShown, totalApplications]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
