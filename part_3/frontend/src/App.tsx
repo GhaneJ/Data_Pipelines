@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { API_BASE_URL, getDatabaseHealth, getHealth } from "./services/api";
 import type { ApiStatus, DatabaseHealth, HealthStatus } from "./services/api";
 import { BackendStatusPanel } from "./components/BackendStatusPanel";
+import { ApplicationsBrowser } from "./components/ApplicationsBrowser";
 import { CategoryBars } from "./components/CategoryBars";
 import { DecisionTrendChart } from "./components/DecisionTrendChart";
 import { StateMessage } from "./components/StateMessage";
@@ -105,6 +106,8 @@ function App() {
           </>
         )}
       </section>
+
+      <ApplicationsBrowser />
     </main>
   );
 }

@@ -77,6 +77,63 @@ export interface EducationAreaTrend {
   application_count: number;
 }
 
+
+export type DecimalLike = number | string;
+
+export interface ApplicationRecord {
+  diarienummer: string;
+  source_year: number;
+  source_file: string;
+  source_sheet: string;
+  source_row: number;
+  utbildningsnamn: string;
+  utbildningsomrade: string;
+  beslut: string;
+  beslut_normalized: string;
+  is_approved: boolean;
+  lan: string;
+  kommun: string;
+  flera_kommuner: string;
+  has_multiple_municipalities: boolean;
+  antal_kommuner: number;
+  yh_poang: number;
+  studieform: string;
+  is_distance_based: boolean;
+  studietakt_procent: number;
+  examenstyp: string | null;
+  utbildningsanordnare: string;
+  huvudmannatyp: string;
+  huvudmannatyp_normalized: string;
+  sokta_utbildningsomgangar: number;
+  beviljade_utbildningsomgangar: number;
+  sun5_inriktning: string | null;
+  sun5_inriktning_namn: string | null;
+  seqf_niva: DecimalLike | null;
+  smalt_yrkesomrade: string | null;
+  sokta_platser_per_utbildningsomgang: DecimalLike | null;
+  sokta_platser_totalt: DecimalLike | null;
+  beviljade_platser_totalt: DecimalLike | null;
+}
+
+export interface ApplicationList {
+  total: number;
+  limit: number;
+  offset: number;
+  items: ApplicationRecord[];
+}
+
+export interface ApplicationFilters {
+  source_year?: number | "";
+  decision?: string;
+  region?: string;
+  municipality?: string;
+  provider?: string;
+  education_area?: string;
+  study_form?: string;
+  limit?: number;
+  offset?: number;
+}
+
 export class ApiError extends Error {
   status: number | null;
 
@@ -161,4 +218,17 @@ export function getTrendByDecision(params: { year_from?: number; year_to?: numbe
 
 export function getTrendByEducationArea(params: { year_from?: number; year_to?: number; limit?: number } = {}): Promise<EducationAreaTrend[]> {
   return requestJson<EducationAreaTrend[]>("/stats/trends/by-education-area", params);
+}
+
+
+export function getApplications(filters: ApplicationFilters = {}): Promise<ApplicationList> {
+  return requestJson<ApplicationList>("/applications", {
+    ...filters,
+    limit: filters.limit ?? 25,
+    offset: filters.offset ?? 0,
+  });
+}
+
+export function getApplicationByDiarienummer(diarienummer: string): Promise<ApplicationRecord> {
+  return requestJson<ApplicationRecord>(`/applications/${encodeURIComponent(diarienummer)}`);
 }

@@ -52,6 +52,84 @@ test("renders dashboard shell, backend status, and metric sections", async () =>
     if (url.includes("/stats/trends/by-education-area")) {
       return jsonResponse([{ source_year: 2020, education_area_id: 1, utbildningsomrade: "Data/IT", application_count: 30 }]);
     }
+
+    if (url.includes("/applications/MYH%202024%2F1")) {
+      return jsonResponse({
+        diarienummer: "MYH 2024/1",
+        source_year: 2024,
+        source_file: "source.xlsx",
+        source_sheet: "Tabell 3",
+        source_row: 10,
+        utbildningsnamn: "Data Engineer",
+        utbildningsomrade: "Data/IT",
+        beslut: "Beviljad",
+        beslut_normalized: "approved",
+        is_approved: true,
+        lan: "Stockholm",
+        kommun: "Stockholm",
+        flera_kommuner: "Nej",
+        has_multiple_municipalities: false,
+        antal_kommuner: 1,
+        yh_poang: 400,
+        studieform: "Bunden",
+        is_distance_based: false,
+        studietakt_procent: 100,
+        examenstyp: null,
+        utbildningsanordnare: "Example Provider",
+        huvudmannatyp: "Privat",
+        huvudmannatyp_normalized: "private",
+        sokta_utbildningsomgangar: 2,
+        beviljade_utbildningsomgangar: 1,
+        sun5_inriktning: null,
+        sun5_inriktning_namn: null,
+        seqf_niva: null,
+        smalt_yrkesomrade: null,
+        sokta_platser_per_utbildningsomgang: null,
+        sokta_platser_totalt: null,
+        beviljade_platser_totalt: null,
+      });
+    }
+    if (url.includes("/applications")) {
+      return jsonResponse({
+        total: 1,
+        limit: 25,
+        offset: 0,
+        items: [{
+          diarienummer: "MYH 2024/1",
+          source_year: 2024,
+          source_file: "source.xlsx",
+          source_sheet: "Tabell 3",
+          source_row: 10,
+          utbildningsnamn: "Data Engineer",
+          utbildningsomrade: "Data/IT",
+          beslut: "Beviljad",
+          beslut_normalized: "approved",
+          is_approved: true,
+          lan: "Stockholm",
+          kommun: "Stockholm",
+          flera_kommuner: "Nej",
+          has_multiple_municipalities: false,
+          antal_kommuner: 1,
+          yh_poang: 400,
+          studieform: "Bunden",
+          is_distance_based: false,
+          studietakt_procent: 100,
+          examenstyp: null,
+          utbildningsanordnare: "Example Provider",
+          huvudmannatyp: "Privat",
+          huvudmannatyp_normalized: "private",
+          sokta_utbildningsomgangar: 2,
+          beviljade_utbildningsomgangar: 1,
+          sun5_inriktning: null,
+          sun5_inriktning_namn: null,
+          seqf_niva: null,
+          smalt_yrkesomrade: null,
+          sokta_platser_per_utbildningsomgang: null,
+          sokta_platser_totalt: null,
+          beviljade_platser_totalt: null,
+        }],
+      });
+    }
     return jsonResponse({});
   });
 
@@ -61,6 +139,7 @@ test("renders dashboard shell, backend status, and metric sections", async () =>
   await waitFor(() => expect(screen.getByText(/7,641 application rows/i)).toBeInTheDocument());
   await waitFor(() => expect(screen.getByText(/Curated application story/i)).toBeInTheDocument());
   expect(screen.getByText(/Applications by year/i)).toBeInTheDocument();
+  await waitFor(() => expect(screen.getAllByText("Data Engineer").length).toBeGreaterThan(0));
 });
 
 test("shows helpful message when backend is unreachable", async () => {
