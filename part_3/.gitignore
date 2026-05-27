@@ -38,6 +38,11 @@ dist/
 build/
 .vite/
 coverage/
+part_3/frontend/node_modules/
+part_3/frontend/dist/
+part_3/frontend/.vite/
+part_3/frontend/coverage/
+part_3/frontend/tsconfig.tsbuildinfo
 
 # Editor and OS files
 .vscode/
