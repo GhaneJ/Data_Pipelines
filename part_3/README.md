@@ -4,7 +4,7 @@
 
 Part 3 turns the curated Part 2 MYH applications dataset into a small internal data service.
 
-The project shows the path from a trusted curated dataset to PostgreSQL storage, a FastAPI API, protected admin metadata operations, and a backend structure that can support the remaining portfolio extensions: React visualization and a small explainable ML layer. The implementation stays practical and explainable while using normal professional structure where it solves real project problems.
+The project shows the path from a trusted curated dataset to PostgreSQL storage, a FastAPI API, protected admin metadata operations, and a React + TypeScript dashboard that consumes the public API. The remaining portfolio extension is a small explainable ML layer. The implementation stays practical and explainable while using normal professional structure where it solves real project problems.
 
 ## Source of truth
 
@@ -29,6 +29,8 @@ Sub-project 3.12 adds a protected admin write use case: local application notes 
 
 Sub-project 3.12.1 adds safe database seeder/startup initialization. The PostgreSQL database itself must already exist, and `DATABASE_URL` must point to it. When the FastAPI app starts, the backend safely checks/creates all project-managed tables and indexes through code. Startup does not reload, truncate, delete, or overwrite curated application data or admin notes.
 
+Sub-project 3.13 adds a React + TypeScript dashboard under `frontend/`. It consumes public backend endpoints for health, database readiness, statistics, trends, filtered application browsing, and application detail. Protected admin-note endpoints are intentionally not exposed in the public dashboard.
+
 ## Implementation principles
 
 - Use PostgreSQL as the database.
@@ -40,16 +42,40 @@ Sub-project 3.12.1 adds safe database seeder/startup initialization. The Postgre
 - Add structure only when it improves maintainability, validation, operations, or later roadmap work.
 - Keep generated runtime files and internal handoff/control files outside Git tracking.
 
-## Current backend shape after Sub-project 3.12.1
+## Current project shape after Sub-project 3.13
 
 Sub-project 3.10 reorganized the backend into routers and services, added database readiness checks, logging, centralized database-error handling, and focused pytest coverage.
 
-Sub-project 3.11 added a modest scheduled-source-check foundation and refresh metadata upgrade. Sub-project 3.12 added protected admin notes as a safe write-side use case. Sub-project 3.12.1 added safe startup schema initialization with a single SQL schema source of truth.
+Sub-project 3.11 added a modest scheduled-source-check foundation and refresh metadata upgrade. Sub-project 3.12 added protected admin notes as a safe write-side use case. Sub-project 3.12.1 added safe startup schema initialization with a single SQL schema source of truth. Sub-project 3.13 adds the React + TypeScript visualization dashboard and minimal local-development CORS support for the Vite dev server.
 
 ```text
 part_3/
   README.md
   pyproject.toml
+  frontend/
+    README.md
+    package.json
+    index.html
+    vite.config.ts
+    src/
+      App.tsx
+      main.tsx
+      styles.css
+      components/
+        ApplicationsBrowser.tsx
+        ApplicationDetailPanel.tsx
+        BackendStatusPanel.tsx
+        CategoryBars.tsx
+        DecisionTrendChart.tsx
+        StateMessage.tsx
+        SummaryCards.tsx
+        YearTrendChart.tsx
+      hooks/
+        useDashboardMetrics.ts
+      services/
+        api.ts
+      test/
+        setup.ts
   backend/
     README.md
     requirements.txt
@@ -204,7 +230,85 @@ POST /refresh
 
 `GET /health` is intentionally lightweight. It only confirms that the FastAPI process can respond.
 
-`GET /health/db` checks database readiness for real API use. It verifies that the database connection works, required tables exist, the `applications` table has rows, and key lookup tables have rows. This endpoint is useful for local validation now and for the planned React dashboard later.
+`GET /health/db` checks database readiness for real API use. It verifies that the database connection works, required tables exist, the `applications` table has rows, and key lookup tables have rows. The React dashboard uses this endpoint to show whether the database is ready for a demo.
+
+
+## React + TypeScript dashboard
+
+Sub-project 3.13 adds the frontend under:
+
+```text
+frontend/
+```
+
+The dashboard is a Vite + React + TypeScript app. It is presentation-oriented, but it uses real public API endpoints instead of hardcoded demo data.
+
+Frontend features:
+
+- backend/API status panel using `/health`,
+- database readiness panel using `/health/db`,
+- summary cards based on `/stats/by-year` and `/stats/by-decision`,
+- yearly application trend chart,
+- decision trend chart,
+- region and education-area visualizations,
+- bounded filterable application browser using `/applications`,
+- selected application detail panel using `/applications/{diarienummer}`,
+- loading, empty, and error states for demo safety.
+
+Protected admin-note endpoints are not called by the React dashboard. They remain backend/API features tested separately with `PART3_ADMIN_TOKEN` and `X-Admin-Token`.
+
+### Start the frontend
+
+Start the backend first from `part_3`, with `DATABASE_URL` configured:
+
+```bash
+python -m uvicorn backend.app.main:app --reload
+```
+
+Then start the frontend from `part_3/frontend`:
+
+```bash
+npm install
+npm run dev
+```
+
+The local Vite URL is normally:
+
+```text
+http://localhost:5173
+```
+
+The frontend uses this default backend URL:
+
+```text
+http://127.0.0.1:8000
+```
+
+Override it with a local environment variable when needed:
+
+```bash
+VITE_API_BASE_URL=http://127.0.0.1:8000 npm run dev
+```
+
+PowerShell example:
+
+```powershell
+$env:VITE_API_BASE_URL="http://127.0.0.1:8000"
+npm run dev
+```
+
+### Frontend validation
+
+From `part_3/frontend`:
+
+```bash
+npm install
+npm run build
+npm run lint
+npm test
+```
+
+`npm run lint` currently runs TypeScript type-checking through `tsc --noEmit`, keeping the frontend validation lightweight and explainable.
 
 ## MYH source-check foundation
 
@@ -477,7 +581,7 @@ To include the operational refresh call in the demo sequence:
 python backend/scripts/demo_api.py --include-refresh
 ```
 
-## Expanded roadmap after 3.12
+## Expanded roadmap after 3.13
 
 The assignment remains the baseline for required deliverables, but the assessor has allowed stronger additions when they remain explainable at vocational/YH-student level and improve the final project/demo value.
 
@@ -487,8 +591,8 @@ Current roadmap:
 3.10 Backend Structure and Robustness Foundation — completed
 3.11 Scheduled MYH Source Check and Refresh Upgrade — completed
 3.12 Protected Admin Operations and Safe Write Use Case — completed
-3.13 React + TypeScript Visualization and Trend Dashboard — next
-3.14 Small Explainable ML Extension
+3.13 React + TypeScript Visualization and Trend Dashboard — completed
+3.14 Small Explainable ML Extension — next
 3.15 Final Integration, Presentation Update, and Submission Cleanup
 ```
 
@@ -498,7 +602,7 @@ Guiding rule:
 Vocational level means explainable and proportionate, not toy-like or artificially weak. Use normal professional structure when it improves correctness, maintainability, robustness, operations, or presentation value.
 ```
 
-No React frontend or ML module is implemented in 3.12. Protected admin notes are implemented with create, list, replace, partial update, and delete operations, but full user accounts, login flows, and complex authorization remain intentionally excluded.
+The React dashboard is now implemented and consumes public read/statistics endpoints. No ML module is implemented yet. Protected admin notes are implemented with create, list, replace, partial update, and delete operations, but they are not exposed in the public dashboard. Full user accounts, login flows, and complex authorization remain intentionally excluded.
 
 ## Git policy
 
