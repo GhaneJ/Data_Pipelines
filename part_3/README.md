@@ -27,6 +27,8 @@ Sub-project 3.11 added a controlled MYH source-check foundation. It can inspect 
 
 Sub-project 3.12 adds a protected admin write use case: local application notes stored in a separate metadata table. Admin notes do **not** modify the curated MYH source data and require a configured `PART3_ADMIN_TOKEN` sent as `X-Admin-Token`.
 
+Sub-project 3.12.1 adds safe database seeder/startup initialization. The PostgreSQL database itself must already exist, and `DATABASE_URL` must point to it. When the FastAPI app starts, the backend safely checks/creates all project-managed tables and indexes through code. Startup does not reload, truncate, delete, or overwrite curated application data or admin notes.
+
 ## Implementation principles
 
 - Use PostgreSQL as the database.
@@ -38,11 +40,11 @@ Sub-project 3.12 adds a protected admin write use case: local application notes 
 - Add structure only when it improves maintainability, validation, operations, or later roadmap work.
 - Keep generated runtime files and internal handoff/control files outside Git tracking.
 
-## Current backend shape after Sub-project 3.12
+## Current backend shape after Sub-project 3.12.1
 
 Sub-project 3.10 reorganized the backend into routers and services, added database readiness checks, logging, centralized database-error handling, and focused pytest coverage.
 
-Sub-project 3.11 added a modest scheduled-source-check foundation and refresh metadata upgrade. Sub-project 3.12 added protected admin notes as a safe write-side use case.
+Sub-project 3.11 added a modest scheduled-source-check foundation and refresh metadata upgrade. Sub-project 3.12 added protected admin notes as a safe write-side use case. Sub-project 3.12.1 added safe startup schema initialization with a single SQL schema source of truth.
 
 ```text
 part_3/
@@ -73,6 +75,7 @@ part_3/
       services/
         __init__.py
         admin_notes.py            # local admin-note storage service
+        database_seeder.py         # safe startup schema/index bootstrap
         applications.py
         common.py
         export.py
@@ -89,22 +92,25 @@ part_3/
       smoke_test_api.py
       validate_database.py
     sql/
-      schema.sql
-      indexes.sql
+      reset_schema.sql             # explicit full-reload reset, never used by startup
+      schema.sql                   # safe CREATE TABLE IF NOT EXISTS schema source
+      indexes.sql                  # safe CREATE INDEX IF NOT EXISTS indexes
     tests/
       test_admin_auth.py
       test_admin_notes_service.py
       test_admin_routes.py
       test_check_source_status_script.py
+      test_database_seeder.py
       test_filter_helpers.py
       test_health_service.py
+      test_load_curated_data.py
       test_operations_routes.py
       test_routes.py
       test_schemas_and_export.py
       test_source_check_service.py
 ```
 
-`main.py` remains app assembly only. Route code lives in `backend/app/routers/`. Database-backed query/business logic lives in `backend/app/services/`. Response models remain in `schemas.py` because splitting small schemas further is still unnecessary.
+`main.py` remains app assembly and startup registration only. Route code lives in `backend/app/routers/`. Database-backed query/business logic lives in `backend/app/services/`. Response models remain in `schemas.py` because splitting small schemas further is still unnecessary.
 
 ## Database shape
 
@@ -129,6 +135,17 @@ application_notes
 ```
 
 The `applications` table remains the central curated-data table. Repeated high-value fields such as provider, education area, location, decision, principal type, and study form are represented through lookup tables. The `application_notes` table is separate local metadata for protected admin use and does not overwrite source data.
+
+Database initialization has a strict separation of responsibilities:
+
+```text
+backend/sql/schema.sql        safe table definitions, used by startup and loader
+backend/sql/indexes.sql       safe index definitions, used by startup and loader
+backend/sql/reset_schema.sql  explicit curated-data reset, used only by loader/refresh
+```
+
+The FastAPI startup seeder runs the safe schema and index files and seeds the fixed decision lookup values with `ON CONFLICT`. It never runs `reset_schema.sql` and never reloads the curated CSV. The loader/refresh workflow uses `reset_schema.sql` explicitly before reloading curated lookup rows and application rows from CSV. `application_notes` is preserved across curated-data reloads.
+
 
 Traceability fields from the curated dataset are preserved:
 
@@ -344,7 +361,7 @@ Trend endpoints support `year_from` and `year_to`. Decision trends can be filter
 
 ## Operational refresh
 
-`POST /refresh` still reloads PostgreSQL from the existing curated CSV. It validates required columns and expected dataset assumptions, recreates the current schema, reloads lookup tables and applications, and returns a JSON summary.
+`POST /refresh` still reloads PostgreSQL from the existing curated CSV. It validates required columns and expected dataset assumptions, runs the explicit curated-data reset, recreates the safe schema, reloads lookup tables and applications, and returns a JSON summary. Local `application_notes` rows are preserved.
 
 3.11 adds source-check metadata to the refresh response when a source-status manifest is available. The endpoint remains safe: it does not download new MYH files or overwrite the curated CSV.
 
@@ -424,7 +441,7 @@ Validate that PostgreSQL matches the curated CSV:
 python backend/scripts/validate_database.py --csv-path ../path/to/myh_curated_applications_2020_2025.csv
 ```
 
-Start the API:
+Start the API. The startup seeder requires `DATABASE_URL`, connects to the existing PostgreSQL database, and safely checks/creates project-managed tables and indexes before serving routes:
 
 ```bash
 uvicorn backend.app.main:app --reload

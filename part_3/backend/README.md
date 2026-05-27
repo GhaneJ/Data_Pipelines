@@ -6,7 +6,7 @@ Sub-projects 3.2-3.8 built the working backend gradually: PostgreSQL storage, co
 
 Sub-project 3.10 reorganized that backend into a clearer structure and added database readiness checks, simple logging, centralized database-error handling, and focused pytest coverage.
 
-Sub-project 3.11 added a scheduler-ready MYH source-check foundation, local source-status manifest, source-check operation endpoints, refresh metadata, a manual source-check script, and focused tests that do not depend on live internet access. Sub-project 3.12 adds protected admin application notes as a small safe write-side use case.
+Sub-project 3.11 added a scheduler-ready MYH source-check foundation, local source-status manifest, source-check operation endpoints, refresh metadata, a manual source-check script, and focused tests that do not depend on live internet access. Sub-project 3.12 adds protected admin application notes as a small safe write-side use case. Sub-project 3.12.1 adds safe database seeder/startup initialization with SQL files as the single schema source of truth.
 
 ## Technology choices
 
@@ -47,12 +47,14 @@ backend/
       providers.py           provider browsing queries
       export.py              CSV export query and serializer
       health.py              database readiness checks
+      database_seeder.py     safe startup schema/index bootstrap
       source_check.py        MYH source-page check and manifest helpers
   runtime/
     README.md                explains local generated runtime files
   sql/
-    schema.sql
-    indexes.sql
+    reset_schema.sql         explicit full-reload reset, never used by startup
+    schema.sql               safe CREATE TABLE IF NOT EXISTS schema source
+    indexes.sql              safe CREATE INDEX IF NOT EXISTS indexes
   scripts/
     load_curated_data.py
     validate_database.py
@@ -61,8 +63,10 @@ backend/
     check_source_status.py
   tests/
     test_check_source_status_script.py
+    test_database_seeder.py
     test_filter_helpers.py
     test_health_service.py
+    test_load_curated_data.py
     test_operations_routes.py
     test_routes.py
     test_schemas_and_export.py
@@ -81,7 +85,7 @@ pip install -r backend/requirements.txt
 
 ## Configure PostgreSQL connection
 
-Set `DATABASE_URL` before running database scripts or database-backed API endpoints.
+Set `DATABASE_URL` before running database scripts or starting the FastAPI app. The PostgreSQL database itself must already exist; the backend creates/checks project-managed tables and indexes inside that existing database.
 
 Windows PowerShell:
 
@@ -97,6 +101,29 @@ export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/myh_applicati
 
 Adjust user, password, host, port, and database name to match your local PostgreSQL setup.
 
+## Startup database seeder
+
+FastAPI startup runs `backend.app.services.database_seeder.ensure_database_ready()`.
+
+The seeder:
+
+- reads `DATABASE_URL`,
+- connects to the existing PostgreSQL database,
+- runs safe `schema.sql` and `indexes.sql`,
+- seeds fixed decision lookup rows with `ON CONFLICT`,
+- includes `application_notes` as a normal project-managed table,
+- does not run `reset_schema.sql`,
+- does not reload the curated CSV,
+- does not drop, truncate, delete, or overwrite existing rows.
+
+SQL ownership is deliberately simple:
+
+```text
+backend/sql/schema.sql        safe table definitions used by startup and loader
+backend/sql/indexes.sql       safe index definitions used by startup and loader
+backend/sql/reset_schema.sql  explicit curated-data reset used only by loader/refresh
+```
+
 ## Load the curated CSV
 
 From `part_3`:
@@ -105,7 +132,7 @@ From `part_3`:
 python backend/scripts/load_curated_data.py --csv-path ../path/to/myh_curated_applications_2020_2025.csv
 ```
 
-By default, the loader runs `schema.sql` and `indexes.sql` first. That recreates the tables, then loads the lookup rows and application rows. The API refresh endpoint uses the same loading helper.
+By default, the loader runs `reset_schema.sql`, then the safe `schema.sql`, then `indexes.sql`. This keeps destructive full reload behavior explicit and separate from API startup. The loader reloads lookup rows and application rows from the curated CSV. The API refresh endpoint uses the same loading helper. `application_notes` is not reset by the curated-data reload.
 
 ## Validate the database
 
@@ -463,10 +490,11 @@ Current refresh behavior:
 
 - reloads from the existing curated CSV,
 - validates required columns and expected dataset assumptions,
-- recreates the current PostgreSQL schema,
+- runs the explicit curated-data reset and then the safe PostgreSQL schema,
 - reloads lookup tables and applications,
 - includes source-check metadata when a manifest is available,
-- does not download or replace source Excel files.
+- does not download or replace source Excel files,
+- preserves local `application_notes` rows.
 
 Optional guardrail:
 
