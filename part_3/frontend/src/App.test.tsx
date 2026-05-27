@@ -147,5 +147,7 @@ test("shows helpful message when backend is unreachable", async () => {
 
   render(<App />);
 
-  await waitFor(() => expect(screen.getByText(/Start the backend from/i)).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByText(/Could not reach the FastAPI backend/i)).toBeInTheDocument());
+  expect(screen.getByText("Offline")).toBeInTheDocument();
+  expect(screen.getByText("Not checked")).toBeInTheDocument();
 });

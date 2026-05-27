@@ -9,10 +9,10 @@ interface BackendStatusPanelProps {
   errorMessage: string | null;
 }
 
-function statusLabel(status: ApiStatus): string {
+function statusLabel(status: ApiStatus, target: "api" | "database"): string {
   if (status === "loading") return "Checking";
   if (status === "success") return "Reachable";
-  if (status === "error") return "Needs attention";
+  if (status === "error") return target === "api" ? "Offline" : "Needs attention";
   return "Not checked";
 }
 
@@ -37,19 +37,19 @@ export function BackendStatusPanel({
       <div className="status-grid">
         <article className={`status-pill status-${healthStatus}`}>
           <span>API</span>
-          <strong>{statusLabel(healthStatus)}</strong>
+          <strong>{statusLabel(healthStatus, "api")}</strong>
           {health && <small>Response: {health.status}</small>}
         </article>
         <article className={`status-pill status-${dbStatus}`}>
           <span>Database</span>
-          <strong>{statusLabel(dbStatus)}</strong>
+          <strong>{statusLabel(dbStatus, "database")}</strong>
           {applicationRows !== null && <small>{applicationRows.toLocaleString()} application rows</small>}
         </article>
       </div>
 
       {errorMessage && (
         <p className="callout warning" role="alert">
-          {errorMessage} Start the backend from <code>part_3</code> and confirm <code>/health/db</code> before the demo.
+          {errorMessage}
         </p>
       )}
     </section>

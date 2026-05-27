@@ -25,6 +25,8 @@ function App() {
     async function checkBackend() {
       setHealthStatus("loading");
       setDbStatus("loading");
+      setHealth(null);
+      setDatabaseHealth(null);
       setErrorMessage(null);
 
       try {
@@ -35,8 +37,12 @@ function App() {
       } catch (error) {
         if (!isActive) return;
         setHealthStatus("error");
-        setDbStatus("error");
-        setErrorMessage(error instanceof Error ? error.message : "The backend could not be reached.");
+        setDbStatus("idle");
+        setHealth(null);
+        setDatabaseHealth(null);
+        setErrorMessage(
+          `Could not reach the FastAPI backend at ${API_BASE_URL}. Start the backend from part_3 and confirm /health/db before the demo.`,
+        );
         return;
       }
 
@@ -48,7 +54,9 @@ function App() {
       } catch (error) {
         if (!isActive) return;
         setDbStatus("error");
-        setErrorMessage(error instanceof Error ? error.message : "The database readiness check failed.");
+        setErrorMessage(
+          "The FastAPI backend is reachable, but the database readiness check failed. Confirm DATABASE_URL and /health/db before the demo.",
+        );
       }
     }
 
