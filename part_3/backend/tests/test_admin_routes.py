@@ -26,7 +26,7 @@ def override_db_connection() -> Iterator[DummyConnection]:
 def build_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     """Create a TestClient with admin auth configured and database mocked."""
     monkeypatch.setenv(ADMIN_TOKEN_ENV_VAR, "test-token")
-    app = create_app()
+    app = create_app(run_startup_seeder=False)
     app.dependency_overrides[get_db_connection] = override_db_connection
     return TestClient(app)
 

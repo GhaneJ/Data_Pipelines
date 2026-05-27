@@ -9,7 +9,7 @@ from backend.app.main import create_app
 
 def test_root_and_lightweight_health_endpoints() -> None:
     """The always-lightweight endpoints should work without PostgreSQL."""
-    client = TestClient(create_app())
+    client = TestClient(create_app(run_startup_seeder=False))
 
     root = client.get("/")
     assert root.status_code == 200
@@ -23,7 +23,7 @@ def test_root_and_lightweight_health_endpoints() -> None:
 
 def test_expected_routes_are_registered() -> None:
     """The refactor should keep the existing public API surface registered."""
-    app = create_app()
+    app = create_app(run_startup_seeder=False)
     paths = {route.path for route in app.routes}
 
     expected_paths = {
@@ -50,3 +50,17 @@ def test_expected_routes_are_registered() -> None:
     }
 
     assert expected_paths.issubset(paths)
+
+
+def test_startup_calls_database_seeder(monkeypatch) -> None:
+    """The real FastAPI startup path should call the database bootstrap service."""
+    from backend.app import main as main_module
+
+    calls = []
+    monkeypatch.setattr(main_module, "ensure_database_ready", lambda: calls.append("seeded"))
+
+    with TestClient(main_module.create_app()) as client:
+        response = client.get("/health")
+
+    assert response.status_code == 200
+    assert calls == ["seeded"]
