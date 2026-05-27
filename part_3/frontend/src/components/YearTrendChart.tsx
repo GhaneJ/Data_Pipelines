@@ -1,0 +1,31 @@
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import type { YearStats } from "../services/api";
+
+interface YearTrendChartProps {
+  data: YearStats[];
+}
+
+export function YearTrendChart({ data }: YearTrendChartProps) {
+  return (
+    <article className="chart-card">
+      <div className="section-heading compact">
+        <div>
+          <p className="eyebrow">Trend</p>
+          <h2>Applications by year</h2>
+        </div>
+        <p className="muted">Total records grouped by source_year.</p>
+      </div>
+      <div className="chart-frame" aria-label="Applications by year chart">
+        <ResponsiveContainer width="100%" height={310}>
+          <BarChart data={data} margin={{ top: 16, right: 16, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="source_year" />
+            <YAxis />
+            <Tooltip />
+            <Bar dataKey="total_applications" name="Applications" radius={[8, 8, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </article>
+  );
+}
