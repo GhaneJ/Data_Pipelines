@@ -2,3 +2,11 @@ venv
 env
 *pycache*
 .env
+
+# Part 3 React frontend generated files
+part_3/frontend/node_modules/
+part_3/frontend/dist/
+part_3/frontend/.vite/
+part_3/frontend/coverage/
+part_3/frontend/*.tsbuildinfo
+part_3/frontend/vite.config.js
