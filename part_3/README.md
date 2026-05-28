@@ -4,7 +4,7 @@
 
 Part 3 turns the curated Part 2 MYH applications dataset into a small internal data service.
 
-The project shows the path from a trusted curated dataset to PostgreSQL storage, a FastAPI API, protected admin metadata operations, and a React + TypeScript dashboard that consumes the public API. The remaining portfolio extension is a small explainable ML layer. The implementation stays practical and explainable while using normal professional structure where it solves real project problems.
+The project shows the path from a trusted curated dataset to PostgreSQL storage, a FastAPI API, protected admin metadata operations, a React + TypeScript dashboard that consumes the public API, and now a cross-cutting middleware/error foundation for safer future security work. The remaining roadmap adds authentication, API keys, provider/admin workflows, operational hardening, and a small explainable ML layer in staged steps. The implementation stays practical and explainable while using normal professional structure where it solves real project problems.
 
 ## Source of truth
 
@@ -31,6 +31,8 @@ Sub-project 3.12.1 adds safe database seeder/startup initialization. The Postgre
 
 Sub-project 3.13 adds a React + TypeScript dashboard under `frontend/`. It consumes public backend endpoints for health, database readiness, statistics, trends, filtered application browsing, and application detail. Protected admin-note endpoints are intentionally not exposed in the public dashboard.
 
+Sub-project 3.14 adds request IDs, safe request logging, and standardized error envelopes before the larger authentication, authorization, API-key, and provider/admin workflow layers. It does not implement login, API keys, provider CRUD, admin review workflow, or ML.
+
 ## Implementation principles
 
 - Use PostgreSQL as the database.
@@ -42,11 +44,11 @@ Sub-project 3.13 adds a React + TypeScript dashboard under `frontend/`. It consu
 - Add structure only when it improves maintainability, validation, operations, or later roadmap work.
 - Keep generated runtime files and internal handoff/control files outside Git tracking.
 
-## Current project shape after Sub-project 3.13
+## Current project shape after Sub-project 3.14
 
 Sub-project 3.10 reorganized the backend into routers and services, added database readiness checks, logging, centralized database-error handling, and focused pytest coverage.
 
-Sub-project 3.11 added a modest scheduled-source-check foundation and refresh metadata upgrade. Sub-project 3.12 added protected admin notes as a safe write-side use case. Sub-project 3.12.1 added safe startup schema initialization with a single SQL schema source of truth. Sub-project 3.13 adds the React + TypeScript visualization dashboard and minimal local-development CORS support for the Vite dev server.
+Sub-project 3.11 added a modest scheduled-source-check foundation and refresh metadata upgrade. Sub-project 3.12 added protected admin notes as a safe write-side use case. Sub-project 3.12.1 added safe startup schema initialization with a single SQL schema source of truth. Sub-project 3.13 added the React + TypeScript visualization dashboard and minimal local-development CORS support for the Vite dev server. Sub-project 3.14 adds request-context middleware, request logging middleware, and centralized safe error responses.
 
 ```text
 part_3/
@@ -83,12 +85,17 @@ part_3/
       __init__.py
       database.py
       dependencies.py
-      exception_handlers.py
+      exception_handlers.py       # central safe API error handlers
       logging_config.py
       main.py
       queries.py                 # compatibility exports for older imports
       schemas.py
       security.py                # simple PART3_ADMIN_TOKEN / X-Admin-Token dependency
+      core/
+        errors.py                # standard API error envelope helpers
+      middleware/
+        request_context.py       # X-Request-ID handling
+        logging_middleware.py    # safe request logging
       routers/
         __init__.py
         admin.py                 # protected application-note endpoints
@@ -127,7 +134,9 @@ part_3/
       test_admin_routes.py
       test_check_source_status_script.py
       test_database_seeder.py
+      test_error_handlers.py
       test_filter_helpers.py
+      test_middleware.py
       test_health_service.py
       test_load_curated_data.py
       test_operations_routes.py
@@ -232,6 +241,38 @@ POST /refresh
 
 `GET /health/db` checks database readiness for real API use. It verifies that the database connection works, required tables exist, the `applications` table has rows, and key lookup tables have rows. The React dashboard uses this endpoint to show whether the database is ready for a demo.
 
+
+## Request IDs, logging, and safe error responses
+
+Sub-project 3.14 adds a cross-cutting backend foundation that future auth/API-key/workflow features can reuse.
+
+Request ID behavior:
+
+- callers may send `X-Request-ID`,
+- the backend generates a UUID request ID when the header is missing or unsafe,
+- the request ID is stored on `request.state`,
+- every response includes `X-Request-ID`,
+- API error responses include the same request ID in the JSON body,
+- request logs include the request ID.
+
+Request logging records method, path, safe query parameters, status code, duration in milliseconds, client host, and request ID. It does not log request bodies, response bodies, admin tokens, authorization headers, API keys, or token-like query values.
+
+Standard API errors now use this envelope:
+
+```json
+{
+  "error": {
+    "code": "validation_error",
+    "message": "Request validation failed.",
+    "request_id": "demo-request-123"
+  },
+  "detail": "Request validation failed."
+}
+```
+
+The top-level `detail` field is kept for compatibility with existing FastAPI/browser helpers, while new code should use the `error` object. The handlers preserve important status codes such as 400, 401, 403, 404, 422, 500, and 503, and avoid exposing stack traces or internal database exception details.
+
+3.14 prepares for authentication and API keys, but it does not implement them.
 
 ## React + TypeScript dashboard
 
@@ -518,6 +559,7 @@ python -m compileall backend/app backend/scripts
 Run the focused tests:
 
 ```bash
+python -m compileall backend/app backend/scripts
 python -m pytest
 ```
 
@@ -559,6 +601,8 @@ http://127.0.0.1:8000/health
 http://127.0.0.1:8000/health/db
 http://127.0.0.1:8000/operations/source-status
 http://127.0.0.1:8000/admin/applications/{diarienummer}/notes
+http://127.0.0.1:8000/does-not-exist
+http://127.0.0.1:8000/applications?limit=wrong
 http://127.0.0.1:8000/docs
 ```
 
@@ -581,7 +625,7 @@ To include the operational refresh call in the demo sequence:
 python backend/scripts/demo_api.py --include-refresh
 ```
 
-## Expanded roadmap after 3.13
+## Expanded roadmap after 3.14
 
 The assignment remains the baseline for required deliverables, but the assessor has allowed stronger additions when they remain explainable at vocational/YH-student level and improve the final project/demo value.
 
@@ -591,9 +635,17 @@ Current roadmap:
 3.10 Backend Structure and Robustness Foundation — completed
 3.11 Scheduled MYH Source Check and Refresh Upgrade — completed
 3.12 Protected Admin Operations and Safe Write Use Case — completed
+3.12.1 Database Seeder Initialization — completed
 3.13 React + TypeScript Visualization and Trend Dashboard — completed
-3.14 Small Explainable ML Extension — next
-3.15 Final Integration, Presentation Update, and Submission Cleanup
+3.14 Cross-cutting API Middleware Foundation — completed
+3.15 Token Authentication and Role-Based Authorization — next
+3.16 API Key Access System
+3.17 Provider Application Submission CRUD API
+3.18 Admin Review and Decision Workflow API
+3.19 Authenticated React Admin and Provider Workspace
+3.20 Scheduled POST/Refresh Operations Hardening
+3.21 Small Explainable ML Extension
+3.22 Final Integration, Presentation Update, and Submission Cleanup
 ```
 
 Guiding rule:
@@ -602,7 +654,7 @@ Guiding rule:
 Vocational level means explainable and proportionate, not toy-like or artificially weak. Use normal professional structure when it improves correctness, maintainability, robustness, operations, or presentation value.
 ```
 
-The React dashboard is now implemented and consumes public read/statistics endpoints. No ML module is implemented yet. Protected admin notes are implemented with create, list, replace, partial update, and delete operations, but they are not exposed in the public dashboard. Full user accounts, login flows, and complex authorization remain intentionally excluded.
+The React dashboard is implemented and consumes public read/statistics endpoints. The middleware/error foundation is now in place for future security and workflow layers. Token authentication, role-based authorization, API keys, provider CRUD, admin review workflows, authenticated React workspaces, and ML are still not implemented yet; they are planned for later sub-projects.
 
 ## Git policy
 
