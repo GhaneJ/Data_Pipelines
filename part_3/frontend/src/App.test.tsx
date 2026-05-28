@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
-import App from "./App";
+import App from "@/App";
 
 const jsonResponse = (payload: unknown) => Promise.resolve(new Response(JSON.stringify(payload), { status: 200 }));
 

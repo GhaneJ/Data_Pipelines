@@ -1,4 +1,4 @@
-import type { ApiStatus } from "../services/api";
+import type { ApiStatus } from "@/services/api";
 
 interface StateMessageProps {
   status: ApiStatus;

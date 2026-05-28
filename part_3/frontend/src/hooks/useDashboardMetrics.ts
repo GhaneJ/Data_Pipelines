@@ -6,7 +6,7 @@ import {
   getStatsByYear,
   getTrendByDecision,
   getTrendByEducationArea,
-} from "../services/api";
+} from "@/services/api";
 import type {
   ApiStatus,
   DecisionStats,
@@ -15,7 +15,7 @@ import type {
   EducationAreaTrend,
   RegionStats,
   YearStats,
-} from "../services/api";
+} from "@/services/api";
 
 export interface DashboardMetricsState {
   status: ApiStatus;

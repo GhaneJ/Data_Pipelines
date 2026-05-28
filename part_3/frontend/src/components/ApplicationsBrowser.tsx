@@ -1,8 +1,8 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { getApplicationByDiarienummer, getApplications } from "../services/api";
-import type { ApiStatus, ApplicationFilters, ApplicationList, ApplicationRecord } from "../services/api";
-import { ApplicationDetailPanel } from "./ApplicationDetailPanel";
-import { StateMessage } from "./StateMessage";
+import { getApplicationByDiarienummer, getApplications } from "@/services/api";
+import type { ApiStatus, ApplicationFilters, ApplicationList, ApplicationRecord } from "@/services/api";
+import { ApplicationDetailPanel } from "@/components/ApplicationDetailPanel";
+import { StateMessage } from "@/components/StateMessage";
 
 const DEFAULT_PAGE_SIZE = 25;
 const PAGE_SIZE_OPTIONS = [10, 25, 50] as const;

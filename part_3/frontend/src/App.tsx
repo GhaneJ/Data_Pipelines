@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
-import { API_BASE_URL, getDatabaseHealth, getHealth } from "./services/api";
-import type { ApiStatus, DatabaseHealth, HealthStatus } from "./services/api";
-import { BackendStatusPanel } from "./components/BackendStatusPanel";
-import { ApplicationsBrowser } from "./components/ApplicationsBrowser";
-import { CategoryBars } from "./components/CategoryBars";
-import { DecisionTrendChart } from "./components/DecisionTrendChart";
-import { StateMessage } from "./components/StateMessage";
-import { SummaryCards } from "./components/SummaryCards";
-import { YearTrendChart } from "./components/YearTrendChart";
-import { useDashboardMetrics } from "./hooks/useDashboardMetrics";
-import "./styles.css";
+import { API_BASE_URL, getDatabaseHealth, getHealth } from "@/services/api";
+import type { ApiStatus, DatabaseHealth, HealthStatus } from "@/services/api";
+import { BackendStatusPanel } from "@/components/BackendStatusPanel";
+import { ApplicationsBrowser } from "@/components/ApplicationsBrowser";
+import { CategoryBars } from "@/components/CategoryBars";
+import { DecisionTrendChart } from "@/components/DecisionTrendChart";
+import { StateMessage } from "@/components/StateMessage";
+import { SummaryCards } from "@/components/SummaryCards";
+import { YearTrendChart } from "@/components/YearTrendChart";
+import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
+import "@/styles.css";
 
 function App() {
   const [healthStatus, setHealthStatus] = useState<ApiStatus>("idle");

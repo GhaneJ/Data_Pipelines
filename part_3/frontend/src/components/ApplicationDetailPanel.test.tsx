@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
-import { ApplicationDetailPanel } from "./ApplicationDetailPanel";
-import type { ApplicationRecord } from "../services/api";
+import { ApplicationDetailPanel } from "@/components/ApplicationDetailPanel";
+import type { ApplicationRecord } from "@/services/api";
 
 const application: ApplicationRecord = {
   diarienummer: "MYH 2024/1",

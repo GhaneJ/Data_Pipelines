@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { SummaryCards } from "./SummaryCards";
+import { SummaryCards } from "@/components/SummaryCards";
 
 test("renders summary values from year and decision statistics", () => {
   render(

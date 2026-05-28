@@ -1,4 +1,4 @@
-import { buildApiUrl } from "./api";
+import { buildApiUrl } from "@/services/api";
 
 test("builds API URLs with the configured base URL and query parameters", () => {
   const url = buildApiUrl("/applications", {

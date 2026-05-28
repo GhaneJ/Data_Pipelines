@@ -1,5 +1,5 @@
 import { Line, LineChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import type { DecisionTrend } from "../services/api";
+import type { DecisionTrend } from "@/services/api";
 
 interface DecisionTrendChartProps {
   data: DecisionTrend[];

@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { StateMessage } from "./StateMessage";
+import { StateMessage } from "@/components/StateMessage";
 
 test("renders loading, error, and empty states", () => {
   const { rerender } = render(<StateMessage status="loading" />);

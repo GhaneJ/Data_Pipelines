@@ -1,5 +1,5 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import type { EducationAreaStats, RegionStats } from "../services/api";
+import type { EducationAreaStats, RegionStats } from "@/services/api";
 
 interface CategoryBarsProps {
   regions: RegionStats[];

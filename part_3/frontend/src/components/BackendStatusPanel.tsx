@@ -1,4 +1,4 @@
-import type { ApiStatus, DatabaseHealth, HealthStatus } from "../services/api";
+import type { ApiStatus, DatabaseHealth, HealthStatus } from "@/services/api";
 
 interface BackendStatusPanelProps {
   apiBaseUrl: string;

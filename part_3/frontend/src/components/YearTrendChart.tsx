@@ -1,5 +1,5 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import type { YearStats } from "../services/api";
+import type { YearStats } from "@/services/api";
 
 interface YearTrendChartProps {
   data: YearStats[];

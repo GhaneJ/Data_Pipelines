@@ -1,5 +1,5 @@
-import type { ApiStatus, ApplicationRecord } from "../services/api";
-import { StateMessage } from "./StateMessage";
+import type { ApiStatus, ApplicationRecord } from "@/services/api";
+import { StateMessage } from "@/components/StateMessage";
 
 interface ApplicationDetailPanelProps {
   application: ApplicationRecord | null;

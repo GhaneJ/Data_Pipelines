@@ -1,4 +1,4 @@
-import type { DecisionStats, YearStats } from "../services/api";
+import type { DecisionStats, YearStats } from "@/services/api";
 
 interface SummaryCardsProps {
   yearStats: YearStats[];

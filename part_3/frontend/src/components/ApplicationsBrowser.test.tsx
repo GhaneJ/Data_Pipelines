@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ApplicationsBrowser } from "./ApplicationsBrowser";
-import type { ApplicationRecord } from "../services/api";
+import { ApplicationsBrowser } from "@/components/ApplicationsBrowser";
+import type { ApplicationRecord } from "@/services/api";
 
 const application: ApplicationRecord = {
   diarienummer: "MYH 2024/1",
