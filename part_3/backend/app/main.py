@@ -10,6 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.exception_handlers import register_exception_handlers
 from backend.app.logging_config import configure_logging
+from backend.app.middleware.logging_middleware import RequestLoggingMiddleware
+from backend.app.middleware.request_context import RequestIDMiddleware
 from backend.app.routers import admin, applications, export, health, operations, providers, stats
 from backend.app.services.database_seeder import ensure_database_ready
 
@@ -35,6 +37,16 @@ def add_local_dashboard_cors(app: FastAPI) -> None:
     )
 
 
+def add_cross_cutting_middleware(app: FastAPI) -> None:
+    """Add request-id and safe request-logging middleware.
+
+    This is registered after CORS so request ids are still attached to local
+    dashboard preflight responses, while keeping CORS behavior unchanged.
+    """
+    app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(RequestIDMiddleware)
+
+
 def build_lifespan(run_startup_seeder: bool = True):
     """Build the FastAPI lifespan handler.
 
@@ -57,12 +69,13 @@ def create_app(*, run_startup_seeder: bool = True) -> FastAPI:
 
     app = FastAPI(
         title="MYH Applications API",
-        version="0.3.13",
+        version="0.3.14",
         description="Read, operational, and protected-admin API for the curated MYH applications dataset stored in PostgreSQL.",
         lifespan=build_lifespan(run_startup_seeder),
     )
     register_exception_handlers(app)
     add_local_dashboard_cors(app)
+    add_cross_cutting_middleware(app)
 
     app.include_router(health.router)
     app.include_router(applications.router)
