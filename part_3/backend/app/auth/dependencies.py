@@ -12,7 +12,7 @@ from backend.app.auth.token_store import (
     ADMIN_TOKEN_HEADER,
     AuthConfigurationError,
     EnvironmentTokenStore,
-    verify_admin_token,
+    verify_admin_header_token,
 )
 
 AUTHORIZATION_HEADER = "Authorization"
@@ -49,8 +49,7 @@ def parse_bearer_token(authorization: str | None) -> str:
     if authorization is None or not authorization.strip():
         raise _unauthorized()
 
-    value = authorization.strip()
-    parts = value.split()
+    parts = authorization.strip().split()
     if len(parts) != 2 or parts[0].lower() != "bearer" or not parts[1].strip():
         raise _unauthorized(_MALFORMED_BEARER)
     return parts[1].strip()
@@ -70,15 +69,15 @@ def get_current_principal(
 CurrentPrincipal = Annotated[AuthenticatedPrincipal, Depends(get_current_principal)]
 
 
-def get_admin_compatible_principal(
+def get_admin_route_principal(
     authorization: Annotated[str | None, Header(alias=AUTHORIZATION_HEADER)] = None,
     x_admin_token: Annotated[str | None, Header(alias=ADMIN_TOKEN_HEADER)] = None,
 ) -> AuthenticatedPrincipal:
-    """Authenticate admin routes with bearer token first, legacy header second.
+    """Authenticate admin routes with bearer token first, then X-Admin-Token.
 
     When both headers are present, the standard Authorization bearer token is
-    authoritative. The legacy X-Admin-Token bridge only accepts the configured
-    admin token and exists for backward-compatible local admin-note workflows.
+    authoritative. The X-Admin-Token path remains supported for local admin-note
+    workflows that already use the project admin token.
     """
     store = EnvironmentTokenStore.from_environment()
     try:
@@ -93,7 +92,7 @@ def get_admin_compatible_principal(
         raise _unauthorized(_AUTHENTICATION_REQUIRED)
 
     try:
-        principal = verify_admin_token(x_admin_token)
+        principal = verify_admin_header_token(x_admin_token)
     except AuthConfigurationError as exc:
         raise _service_unavailable(str(exc)) from exc
     if principal is None:
@@ -101,7 +100,7 @@ def get_admin_compatible_principal(
     return principal
 
 
-AdminCompatibleCandidate = Annotated[AuthenticatedPrincipal, Depends(get_admin_compatible_principal)]
+AdminRouteCandidate = Annotated[AuthenticatedPrincipal, Depends(get_admin_route_principal)]
 
 
 def require_role(*roles: Role) -> Callable[[CurrentPrincipal], AuthenticatedPrincipal]:
@@ -135,8 +134,8 @@ def require_provider(principal: CurrentPrincipal) -> AuthenticatedPrincipal:
     return principal
 
 
-def require_admin_compatible(principal: AdminCompatibleCandidate) -> AuthenticatedPrincipal:
-    """Require admin role while also accepting the legacy X-Admin-Token bridge."""
+def require_admin_route_access(principal: AdminRouteCandidate) -> AuthenticatedPrincipal:
+    """Require the admin role for admin routes using supported token headers."""
     if principal.role != Role.ADMIN:
         raise _forbidden()
     return principal
@@ -144,4 +143,4 @@ def require_admin_compatible(principal: AdminCompatibleCandidate) -> Authenticat
 
 AdminPrincipal = Annotated[AuthenticatedPrincipal, Depends(require_admin)]
 ProviderPrincipal = Annotated[AuthenticatedPrincipal, Depends(require_provider)]
-AdminCompatiblePrincipal = Annotated[AuthenticatedPrincipal, Depends(require_admin_compatible)]
+AdminRoutePrincipal = Annotated[AuthenticatedPrincipal, Depends(require_admin_route_access)]

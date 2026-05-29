@@ -6,6 +6,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 
+from backend.app.auth.dependencies import AdminRoutePrincipal
 from backend.app.dependencies import DatabaseConnection
 from backend.app.schemas import (
     ApplicationNote,
@@ -14,7 +15,6 @@ from backend.app.schemas import (
     ApplicationNotePatch,
     ApplicationNoteUpdate,
 )
-from backend.app.security import require_admin_token
 from backend.app.services.admin_notes import (
     create_application_note,
     delete_application_note,
@@ -25,7 +25,7 @@ from backend.app.services.admin_notes import (
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-AdminToken = Annotated[str, Depends(require_admin_token)]
+AdminPrincipal = AdminRoutePrincipal
 PositiveNoteId = Annotated[int, Path(gt=0, description="Local admin-note id.")]
 
 
@@ -49,7 +49,7 @@ def _missing_application(diarienummer: str) -> HTTPException:
 def get_application_notes(
     diarienummer: str,
     conn: DatabaseConnection,
-    admin_token: AdminToken,
+    admin_principal: AdminPrincipal,
 ) -> list[dict[str, Any]]:
     """List local admin notes for one existing application."""
     notes = list_application_notes(conn, diarienummer)
@@ -67,7 +67,7 @@ def post_application_note(
     diarienummer: str,
     payload: ApplicationNoteCreate,
     conn: DatabaseConnection,
-    admin_token: AdminToken,
+    admin_principal: AdminPrincipal,
 ) -> dict[str, Any]:
     """Create a local admin note for one existing application."""
     note = create_application_note(conn, diarienummer, _clean_note_or_400(payload.note_text))
@@ -81,7 +81,7 @@ def put_application_note(
     note_id: PositiveNoteId,
     payload: ApplicationNoteUpdate,
     conn: DatabaseConnection,
-    admin_token: AdminToken,
+    admin_principal: AdminPrincipal,
 ) -> dict[str, Any]:
     """Replace one local admin note with a new full note_text value."""
     note = update_application_note(conn, note_id, _clean_note_or_400(payload.note_text))
@@ -95,7 +95,7 @@ def patch_application_note(
     note_id: PositiveNoteId,
     payload: ApplicationNotePatch,
     conn: DatabaseConnection,
-    admin_token: AdminToken,
+    admin_principal: AdminPrincipal,
 ) -> dict[str, Any]:
     """Partially update one local admin note.
 
@@ -118,7 +118,7 @@ def patch_application_note(
 def delete_admin_note(
     note_id: PositiveNoteId,
     conn: DatabaseConnection,
-    admin_token: AdminToken,
+    admin_principal: AdminPrincipal,
 ) -> dict[str, Any]:
     """Delete one local admin note."""
     deleted = delete_application_note(conn, note_id)

@@ -5,7 +5,12 @@ from __future__ import annotations
 import pytest
 from fastapi import HTTPException
 
-from backend.app.auth.dependencies import parse_bearer_token, require_admin, require_provider
+from backend.app.auth.dependencies import (
+    get_admin_route_principal,
+    parse_bearer_token,
+    require_admin,
+    require_provider,
+)
 from backend.app.auth.models import AuthenticatedPrincipal, Role
 from backend.app.auth.token_store import (
     ADMIN_TOKEN_ENV_VAR,
@@ -13,8 +18,7 @@ from backend.app.auth.token_store import (
     PROVIDER_TOKEN_ENV_VAR,
     AuthConfigurationError,
     EnvironmentTokenStore,
-    get_configured_admin_token,
-    verify_admin_token,
+    verify_admin_header_token,
 )
 
 
@@ -58,26 +62,35 @@ def test_environment_store_rejects_unknown_tokens(monkeypatch: pytest.MonkeyPatc
 
 
 def test_missing_admin_configuration_fails_clearly(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Admin-only compatibility paths should fail if no admin token is configured."""
+    """Admin-token validation should fail if no admin token is configured."""
     monkeypatch.delenv(ADMIN_TOKEN_ENV_VAR, raising=False)
 
     with pytest.raises(AuthConfigurationError) as exc_info:
-        get_configured_admin_token()
+        verify_admin_header_token("anything")
 
     assert ADMIN_TOKEN_ENV_VAR in str(exc_info.value)
 
 
-def test_verify_admin_token_returns_safe_principal() -> None:
-    """The legacy admin-token helper should reuse the central principal model."""
-    principal = verify_admin_token("expected", expected_token="expected")
+def test_verify_admin_header_token_returns_safe_principal() -> None:
+    """The X-Admin-Token helper should reuse the central principal model."""
+    principal = verify_admin_header_token("expected", expected_token="expected")
 
     assert principal == AuthenticatedPrincipal(subject="local-admin", role=Role.ADMIN, provider_id=None)
 
 
-def test_verify_admin_token_rejects_missing_or_wrong_token() -> None:
+def test_verify_admin_header_token_rejects_missing_or_wrong_token() -> None:
     """The helper should reject without exposing configured secrets."""
-    assert verify_admin_token(None, expected_token="expected") is None
-    assert verify_admin_token("wrong", expected_token="expected") is None
+    assert verify_admin_header_token(None, expected_token="expected") is None
+    assert verify_admin_header_token("wrong", expected_token="expected") is None
+
+
+def test_admin_route_principal_accepts_x_admin_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Admin routes should still support X-Admin-Token for local admin-note workflows."""
+    monkeypatch.setenv(ADMIN_TOKEN_ENV_VAR, "admin-secret")
+
+    principal = get_admin_route_principal(x_admin_token="admin-secret")
+
+    assert principal == AuthenticatedPrincipal(subject="local-admin", role=Role.ADMIN, provider_id=None)
 
 
 def test_role_dependencies_allow_matching_roles() -> None:

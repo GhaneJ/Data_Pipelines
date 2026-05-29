@@ -82,8 +82,8 @@ class EnvironmentTokenStore:
             )
 
 
-def get_configured_admin_token() -> str:
-    """Return the configured admin token for legacy checks and tests."""
+def _load_admin_token_from_environment() -> str:
+    """Return the configured admin token for X-Admin-Token validation."""
     token = _read_env(ADMIN_TOKEN_ENV_VAR)
     if not token:
         raise AuthConfigurationError(
@@ -97,14 +97,16 @@ def authenticate_token(token: str | None) -> AuthenticatedPrincipal | None:
     return EnvironmentTokenStore.from_environment().authenticate(token)
 
 
-def verify_admin_token(provided_token: str | None, expected_token: str | None = None) -> AuthenticatedPrincipal | None:
-    """Validate an admin token and return the admin principal.
+def verify_admin_header_token(
+    provided_token: str | None,
+    expected_token: str | None = None,
+) -> AuthenticatedPrincipal | None:
+    """Validate the X-Admin-Token value and return the admin principal.
 
-    This helper exists for the compatibility header bridge and direct unit
-    tests. Endpoint dependencies should use backend.app.auth.dependencies.
+    This helper is used by the admin-note header support path. Standard bearer
+    token authentication should use EnvironmentTokenStore.authenticate().
     """
-    if expected_token is None:
-        expected_token = get_configured_admin_token()
+    expected_token = expected_token if expected_token is not None else _load_admin_token_from_environment()
     expected = expected_token.strip() if expected_token else ""
     provided = provided_token.strip() if provided_token else ""
 
