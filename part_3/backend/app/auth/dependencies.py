@@ -3,24 +3,24 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Annotated
+from datetime import UTC
+from typing import Annotated, Any
 
+import psycopg
 from fastapi import Depends, Header, HTTPException, status
 
 from backend.app.auth.models import AuthenticatedPrincipal, Role
-from backend.app.auth.token_store import (
-    ADMIN_TOKEN_HEADER,
-    AuthConfigurationError,
-    EnvironmentTokenStore,
-    verify_admin_header_token,
-)
+from backend.app.auth.repositories import principal_from_user_row, resolve_access_token_hash, update_token_last_used
+from backend.app.auth.tokens import hash_access_token, is_token_expired
+from backend.app.dependencies import DatabaseConnection
 
 AUTHORIZATION_HEADER = "Authorization"
 
 _AUTHENTICATION_REQUIRED = "Authentication is required."
 _MALFORMED_BEARER = "Use Authorization: Bearer <token>."
 _INVALID_TOKEN = "Invalid authentication token."
-_ADMIN_CONFIGURATION_ERROR = "Admin authentication is not configured."
+_INACTIVE_USER = "Authentication is not available for this user."
+_LOCKED_USER = "Authentication is temporarily unavailable for this user."
 _FORBIDDEN = "You do not have permission to access this resource."
 
 
@@ -32,11 +32,6 @@ def _unauthorized(message: str = _AUTHENTICATION_REQUIRED) -> HTTPException:
 def _forbidden() -> HTTPException:
     """Build a safe 403 error without exposing credential details."""
     return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_FORBIDDEN)
-
-
-def _service_unavailable(message: str = _ADMIN_CONFIGURATION_ERROR) -> HTTPException:
-    """Build a safe 503 error for server-side auth configuration problems."""
-    return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=message)
 
 
 def parse_bearer_token(authorization: str | None) -> str:
@@ -55,52 +50,49 @@ def parse_bearer_token(authorization: str | None) -> str:
     return parts[1].strip()
 
 
+def _is_locked(row: dict[str, Any]) -> bool:
+    locked_until = row.get("locked_until")
+    if locked_until is None:
+        return False
+    if locked_until.tzinfo is None:
+        locked_until = locked_until.replace(tzinfo=UTC)
+    from backend.app.auth.tokens import utc_now
+
+    return locked_until > utc_now()
+
+
+def resolve_current_principal_from_token(
+    conn: psycopg.Connection[dict[str, Any]],
+    raw_token: str,
+) -> AuthenticatedPrincipal:
+    """Resolve a raw bearer token to a safe database-backed principal."""
+    token_hash = hash_access_token(raw_token)
+    row = resolve_access_token_hash(conn, token_hash=token_hash)
+    if row is None:
+        raise _unauthorized(_INVALID_TOKEN)
+    if row.get("revoked_at") is not None:
+        raise _unauthorized(_INVALID_TOKEN)
+    if is_token_expired(row["expires_at"]):
+        raise _unauthorized(_INVALID_TOKEN)
+    if not row.get("is_active", False):
+        raise _unauthorized(_INACTIVE_USER)
+    if _is_locked(row):
+        raise _unauthorized(_LOCKED_USER)
+
+    update_token_last_used(conn, token_id=str(row["token_id"]))
+    return principal_from_user_row(row)
+
+
 def get_current_principal(
+    conn: DatabaseConnection,
     authorization: Annotated[str | None, Header(alias=AUTHORIZATION_HEADER)] = None,
 ) -> AuthenticatedPrincipal:
-    """Authenticate the current request from a standard bearer token."""
+    """Authenticate the current request from a database-issued bearer token."""
     token = parse_bearer_token(authorization)
-    principal = EnvironmentTokenStore.from_environment().authenticate(token)
-    if principal is None:
-        raise _unauthorized(_INVALID_TOKEN)
-    return principal
+    return resolve_current_principal_from_token(conn, token)
 
 
 CurrentPrincipal = Annotated[AuthenticatedPrincipal, Depends(get_current_principal)]
-
-
-def get_admin_route_principal(
-    authorization: Annotated[str | None, Header(alias=AUTHORIZATION_HEADER)] = None,
-    x_admin_token: Annotated[str | None, Header(alias=ADMIN_TOKEN_HEADER)] = None,
-) -> AuthenticatedPrincipal:
-    """Authenticate admin routes with bearer token first, then X-Admin-Token.
-
-    When both headers are present, the standard Authorization bearer token is
-    authoritative. The X-Admin-Token path remains supported for local admin-note
-    workflows that already use the project admin token.
-    """
-    store = EnvironmentTokenStore.from_environment()
-    try:
-        store.require_admin_token_configured()
-    except AuthConfigurationError as exc:
-        raise _service_unavailable(str(exc)) from exc
-
-    if authorization is not None and authorization.strip():
-        return get_current_principal(authorization)
-
-    if x_admin_token is None or not x_admin_token.strip():
-        raise _unauthorized(_AUTHENTICATION_REQUIRED)
-
-    try:
-        principal = verify_admin_header_token(x_admin_token)
-    except AuthConfigurationError as exc:
-        raise _service_unavailable(str(exc)) from exc
-    if principal is None:
-        raise _unauthorized(_INVALID_TOKEN)
-    return principal
-
-
-AdminRouteCandidate = Annotated[AuthenticatedPrincipal, Depends(get_admin_route_principal)]
 
 
 def require_role(*roles: Role) -> Callable[[CurrentPrincipal], AuthenticatedPrincipal]:
@@ -121,26 +113,19 @@ def require_any_role(principal: CurrentPrincipal) -> AuthenticatedPrincipal:
 
 
 def require_admin(principal: CurrentPrincipal) -> AuthenticatedPrincipal:
-    """Require the admin role for standard bearer-authenticated routes."""
+    """Require the admin role for bearer-authenticated routes."""
     if principal.role != Role.ADMIN:
         raise _forbidden()
     return principal
 
 
 def require_provider(principal: CurrentPrincipal) -> AuthenticatedPrincipal:
-    """Require the provider role for standard bearer-authenticated routes."""
+    """Require the provider role for bearer-authenticated routes."""
     if principal.role != Role.PROVIDER:
-        raise _forbidden()
-    return principal
-
-
-def require_admin_route_access(principal: AdminRouteCandidate) -> AuthenticatedPrincipal:
-    """Require the admin role for admin routes using supported token headers."""
-    if principal.role != Role.ADMIN:
         raise _forbidden()
     return principal
 
 
 AdminPrincipal = Annotated[AuthenticatedPrincipal, Depends(require_admin)]
 ProviderPrincipal = Annotated[AuthenticatedPrincipal, Depends(require_provider)]
-AdminRoutePrincipal = Annotated[AuthenticatedPrincipal, Depends(require_admin_route_access)]
+AdminRoutePrincipal = AdminPrincipal
