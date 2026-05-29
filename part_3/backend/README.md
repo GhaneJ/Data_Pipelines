@@ -6,7 +6,7 @@ Sub-projects 3.2-3.8 built the working backend gradually: PostgreSQL storage, co
 
 Sub-project 3.10 reorganized that backend into a clearer structure and added database readiness checks, simple logging, centralized database-error handling, and focused pytest coverage.
 
-Sub-project 3.11 added a scheduler-ready MYH source-check foundation, local source-status manifest, source-check operation endpoints, refresh metadata, a manual source-check script, and focused tests that do not depend on live internet access. Sub-project 3.12 adds protected admin application notes as a small safe write-side use case. Sub-project 3.12.1 adds safe database seeder/startup initialization with SQL files as the single schema source of truth. Sub-project 3.13 adds minimal local-development CORS support so the React/Vite dashboard can call the public API from the browser. Sub-project 3.14 adds request IDs, safe request logging, and standardized API error envelopes. Sub-project 3.15 adds centralized bearer-token authentication, safe admin/provider principals, `/auth/whoami`, and reusable role-based authorization dependencies.
+Sub-project 3.11 added a scheduler-ready MYH source-check foundation, local source-status manifest, source-check operation endpoints, refresh metadata, a manual source-check script, and focused tests that do not depend on live internet access. Sub-project 3.12 adds protected admin application notes as a small safe write-side use case. Sub-project 3.12.1 adds safe database seeder/startup initialization with SQL files as the single schema source of truth. Sub-project 3.13 adds minimal local-development CORS support so the React/Vite dashboard can call the public API from the browser. Sub-project 3.14 adds request IDs, safe request logging, and standardized API error envelopes. Sub-project 3.15 adds centralized RBAC foundations. Sub-project 3.15.1 upgrades authentication to PostgreSQL-backed users, hashed passwords, issued opaque bearer tokens, logout/revocation, and database-backed role authorization.
 
 ## Technology choices
 
@@ -21,7 +21,7 @@ The backend uses:
 - narrow local-development CORS for the React dashboard,
 - request-id middleware and safe request logging,
 - standardized safe API error responses,
-- centralized bearer-token authentication and role-based authorization.
+- database-backed bearer-token authentication and role-based authorization.
 
 No ORM is used.
 
@@ -40,8 +40,11 @@ backend/
     auth/
       dependencies.py        bearer-token parsing and RBAC dependencies
       models.py              safe principal and role models
-      routes.py              /auth/whoami inspection endpoint
-      token_store.py         environment-backed local token mapping
+      password_hashing.py    salted PBKDF2 password hashing
+      repositories.py        auth user/token SQL helpers
+      routes.py              /auth/login, /auth/whoami, /auth/logout
+      token_store.py         retired static-token compatibility guard
+      tokens.py              opaque token generation and hashing
     core/
       errors.py              standard API error envelope helpers
     middleware/
@@ -401,20 +404,34 @@ Use `/health` for quick “is the API process alive?” checks. Use `/health/db`
 
 ## Authentication and role-based authorization
 
-Sub-project 3.15 adds a centralized auth/RBAC layer for the backend. The project uses environment-configured bearer tokens, not users, passwords, sessions, OAuth, JWTs, or database user accounts. This is not full production identity management, but it is a real backend security boundary for this portfolio project.
+Sub-project 3.15.1 upgrades the centralized RBAC foundation into database-backed authentication. The backend stores users in PostgreSQL, stores only salted PBKDF2-HMAC-SHA256 password hashes, issues opaque bearer access tokens from `/auth/login`, stores only token hashes, and supports token expiry and logout/revocation.
 
-Environment variables:
+Auth tables:
 
 ```text
-PART3_ADMIN_TOKEN=<local-admin-token>
-PART3_PROVIDER_TOKEN=<local-provider-token>
-PART3_PROVIDER_ID=<provider-id-for-local-provider>
+auth_users
+auth_access_tokens
 ```
 
-Standard request format:
+Bootstrap environment variables create local users safely during startup. They are not request-time credentials:
 
 ```text
-Authorization: Bearer <token>
+PART3_BOOTSTRAP_ADMIN_USERNAME=admin
+PART3_BOOTSTRAP_ADMIN_PASSWORD=admin-password
+PART3_BOOTSTRAP_ADMIN_DISPLAY_NAME=Local Admin
+
+PART3_BOOTSTRAP_PROVIDER_USERNAME=provider
+PART3_BOOTSTRAP_PROVIDER_PASSWORD=provider-password
+PART3_BOOTSTRAP_PROVIDER_DISPLAY_NAME=Local Provider
+PART3_BOOTSTRAP_PROVIDER_ID=999999
+```
+
+Bootstrap is idempotent. Existing users are left unchanged, including their passwords. The backend can start without these variables, but login only works when matching users already exist in `auth_users`. Raw passwords, raw access tokens, password hashes, and token hashes must not be logged.
+
+Standard request format after login:
+
+```text
+Authorization: Bearer <database-issued-access-token>
 ```
 
 Roles:
@@ -424,66 +441,90 @@ admin
 provider
 ```
 
-The central principal model contains only safe identity and authorization metadata:
+Endpoints:
+
+```text
+POST /auth/login
+GET  /auth/whoami
+POST /auth/logout
+```
+
+A successful login returns the raw token once:
 
 ```json
 {
-  "subject": "local-admin",
+  "access_token": "returned-once",
+  "token_type": "bearer",
+  "expires_at": "2026-05-29T..."
+}
+```
+
+`GET /auth/whoami` returns only safe principal fields. Admin example:
+
+```json
+{
+  "subject": "user:<uuid>",
+  "username": "admin",
+  "display_name": "Local Admin",
   "role": "admin",
   "provider_id": null
 }
 ```
 
-`GET /auth/whoami` requires a valid bearer token and returns the current principal without exposing the token. Admin tokens map to `role: "admin"`. Provider tokens map to `role: "provider"` and include `provider_id` when configured.
+Provider example:
 
-Auth failures use the standardized error envelope from the 3.14 error system. Missing, malformed, and invalid bearer tokens return 401. Valid credentials with the wrong role return 403. All responses still include `X-Request-ID`; error bodies include the same request ID. Token values are not returned by the API and should not appear in request logs.
+```json
+{
+  "subject": "user:<uuid>",
+  "username": "provider",
+  "display_name": "Local Provider",
+  "role": "provider",
+  "provider_id": "999999"
+}
+```
 
-API keys are not implemented in 3.15 and are planned for 3.16. Provider CRUD, admin review/decision workflow, and authenticated React admin/provider pages are not implemented in 3.15.
+Auth failures use the standardized error envelope from the 3.14 error system. Missing, malformed, invalid, expired, or revoked bearer tokens return 401. Valid credentials with the wrong role return 403. All responses still include `X-Request-ID`; error bodies include the same request ID.
+
+This is a real internal database-backed auth system for the project, not OAuth, SSO, MFA, JWT, or enterprise IAM. API keys are not implemented in 3.15.1 and are planned for 3.16. Provider CRUD, admin review/decision workflow, and authenticated React admin/provider pages are later roadmap steps.
 
 ## Protected admin application notes
 
-Sub-project 3.12 adds a small local write-side feature under `/admin`. Sub-project 3.15 protects those routes with the centralized admin RBAC dependency. The server reads the configured admin token from `PART3_ADMIN_TOKEN`.
+Sub-project 3.12 adds a small local write-side feature under `/admin`. Sub-project 3.15.1 protects those routes with database-backed admin bearer tokens. Public read endpoints remain public.
 
-PowerShell example:
+Admin requests use:
 
-```powershell
-$env:PART3_ADMIN_TOKEN="dev-admin-token"
+```text
+Authorization: Bearer <database-issued-admin-access-token>
 ```
 
-Bash/macOS/Linux example:
+The previous static local admin header is no longer accepted for request-time access.
+
+Example flow:
 
 ```bash
-export PART3_ADMIN_TOKEN="dev-admin-token"
-```
+curl -X POST "http://127.0.0.1:8000/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin-password"}'
 
-Preferred protected calls:
-
-```bash
-curl -H "Authorization: Bearer dev-admin-token" \
+curl -H "Authorization: Bearer <admin-access-token>" \
   "http://127.0.0.1:8000/auth/whoami"
 
-curl -H "Authorization: Bearer dev-admin-token" \
+curl -H "Authorization: Bearer <admin-access-token>" \
   "http://127.0.0.1:8000/admin/applications/MYH%202024%2F1/notes"
 
-curl -H "X-Admin-Token: dev-admin-token" \
+curl -H "Authorization: Bearer <admin-access-token>" \
   -H "Content-Type: application/json" \
   -X POST \
   -d '{"note_text":"Check this application before the demo."}' \
   "http://127.0.0.1:8000/admin/applications/MYH%202024%2F1/notes"
 
-curl -H "X-Admin-Token: dev-admin-token" \
-  -H "Content-Type: application/json" \
-  -X PUT \
-  -d '{"note_text":"Replace the local note text."}' \
-  "http://127.0.0.1:8000/admin/notes/1"
-
-curl -H "X-Admin-Token: dev-admin-token" \
+curl -H "Authorization: Bearer <admin-access-token>" \
   -H "Content-Type: application/json" \
   -X PATCH \
   -d '{"note_text":"Partially update the local note text."}' \
   "http://127.0.0.1:8000/admin/notes/1"
 
-curl -H "X-Admin-Token: dev-admin-token" \
+curl -H "Authorization: Bearer <admin-access-token>" \
   -X DELETE "http://127.0.0.1:8000/admin/notes/1"
 ```
 
@@ -491,12 +532,10 @@ The note table is `application_notes`. It stores local admin metadata only. It d
 
 Admin-token behavior:
 
-- `Authorization: Bearer <PART3_ADMIN_TOKEN>` is the preferred admin-note authentication method,
-- `X-Admin-Token: <PART3_ADMIN_TOKEN>` is still accepted for local admin-note workflows,
-- if both headers are present, `Authorization` is preferred,
-- missing or invalid credentials return 401,
+- `Authorization: Bearer <database-issued-admin-access-token>` is required,
+- missing, malformed, expired, revoked, or invalid bearer tokens return 401,
 - valid provider credentials on admin-only routes return 403,
-- missing `PART3_ADMIN_TOKEN` on the server makes protected admin endpoints return a clear configuration error.
+- static request-time admin headers no longer grant access.
 
 ## Common example requests
 
@@ -677,11 +716,11 @@ python backend/scripts/demo_api.py
 python backend/scripts/demo_api.py --print-only
 ```
 
-The smoke test checks the root endpoint, `/health`, `/health/db`, `/operations/source-status`, refresh, core browsing/statistics/provider/export endpoints, and important guardrails. Admin-note endpoints are shown in the demo helper but are not required by the smoke test unless you choose to test them manually with `PART3_ADMIN_TOKEN`, `Authorization: Bearer <token>`, or the supported `X-Admin-Token` header.
+The smoke test checks the root endpoint, `/health`, `/health/db`, `/operations/source-status`, refresh, core browsing/statistics/provider/export endpoints, and important guardrails. Admin-note endpoints are shown in the demo helper but are not required by the smoke test unless you choose to test them manually with a database-issued admin bearer token from `/auth/login`.
 
-## 3.15 scope boundary
+## 3.15.1 scope boundary
 
-Implemented by the end of 3.15:
+Implemented by the end of 3.15.1:
 
 - MYH source-check service,
 - local JSON manifest support,
@@ -693,9 +732,11 @@ Implemented by the end of 3.15:
 - README/control-file updates,
 - protected admin application notes under `/admin`,
 - `application_notes` local metadata table,
-- centralized bearer-token auth and RBAC with admin/provider principals,
-- `/auth/whoami`,
-- migrated admin-note protection with `Authorization: Bearer <PART3_ADMIN_TOKEN>` and `X-Admin-Token` compatibility,
+- database-backed auth users with salted PBKDF2 password hashes,
+- opaque bearer access tokens with hashed storage, expiry, and logout/revocation,
+- `/auth/login`, `/auth/whoami`, and `/auth/logout`,
+- admin-note protection through database-issued admin bearer tokens,
+- provider bearer tokens rejected from admin routes with 403,
 - safe startup database seeder through `schema.sql` and `indexes.sql`,
 - React + TypeScript dashboard in `part_3/frontend`,
 - local-development CORS for the Vite dashboard,
@@ -704,7 +745,7 @@ Implemented by the end of 3.15:
 - standardized safe error response envelopes,
 - focused middleware and error-handler tests.
 
-Still not implemented after 3.15:
+Still not implemented after 3.15.1:
 
 - API key management,
 - provider-submitted application CRUD,
