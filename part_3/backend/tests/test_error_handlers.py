@@ -62,9 +62,8 @@ def test_validation_error_returns_safe_error_envelope_with_request_id() -> None:
     assert payload["error"]["invalid_params"]
 
 
-def test_protected_admin_route_without_token_still_rejects_access(monkeypatch) -> None:
+def test_protected_admin_route_without_token_still_rejects_access() -> None:
     """The standardized envelope must not weaken protected admin behavior."""
-    monkeypatch.setenv("PART3_ADMIN_TOKEN", "test-token")
     client = build_client_with_dummy_db()
 
     response = client.get("/admin/applications/MYH%202024%2F1/notes", headers={REQUEST_ID_HEADER: "admin-123"})

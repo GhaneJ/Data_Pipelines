@@ -2,38 +2,43 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from typing import Any
 
-import pytest
 from fastapi.testclient import TestClient
 
+from backend.app.auth.models import Role
 from backend.app.dependencies import get_db_connection
 from backend.app.main import create_app
 from backend.app.routers import admin
-from backend.app.auth.token_store import ADMIN_TOKEN_ENV_VAR, PROVIDER_ID_ENV_VAR, PROVIDER_TOKEN_ENV_VAR
+from backend.tests.auth_test_utils import FakeAuthConnection, override_db
 
 
-class DummyConnection:
-    """Placeholder connection because service calls are monkeypatched."""
+REQUEST_ID_HEADER = "X-Request-ID"
 
 
-def override_db_connection() -> Iterator[DummyConnection]:
-    """Provide a DB dependency override for admin route tests."""
-    yield DummyConnection()
-
-
-def build_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
-    """Create a TestClient with admin auth configured and database mocked."""
-    monkeypatch.setenv(ADMIN_TOKEN_ENV_VAR, "test-token")
+def build_client(conn: FakeAuthConnection | None = None) -> tuple[TestClient, FakeAuthConnection]:
+    fake_conn = conn or FakeAuthConnection()
     app = create_app(run_startup_seeder=False)
-    app.dependency_overrides[get_db_connection] = override_db_connection
-    return TestClient(app)
+    app.dependency_overrides[get_db_connection] = override_db(fake_conn)
+    return TestClient(app), fake_conn
 
 
-def test_admin_route_rejects_missing_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Protected admin routes should not be public."""
-    client = build_client(monkeypatch)
+def add_admin_and_provider_tokens(conn: FakeAuthConnection) -> None:
+    conn.add_user(username="admin", password="admin-password", role=Role.ADMIN, display_name="Local Admin")
+    conn.add_user(
+        username="provider",
+        password="provider-password",
+        role=Role.PROVIDER,
+        display_name="Local Provider",
+        provider_id="999999",
+    )
+    conn.add_token(username="admin", raw_token="admin-token")
+    conn.add_token(username="provider", raw_token="provider-token")
+
+
+def test_admin_route_rejects_missing_token() -> None:
+    client, conn = build_client()
+    add_admin_and_provider_tokens(conn)
 
     response = client.get("/admin/applications/MYH%202024%2F1/notes")
 
@@ -41,54 +46,62 @@ def test_admin_route_rejects_missing_token(monkeypatch: pytest.MonkeyPatch) -> N
     payload = response.json()
     assert payload["error"]["code"] == "unauthorized"
     assert payload["detail"] == "Authentication is required."
-    assert "X-Request-ID" in response.headers
+    assert REQUEST_ID_HEADER in response.headers
 
 
-def test_admin_route_rejects_wrong_x_admin_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Wrong X-Admin-Token values should not reach the service layer."""
-    client = build_client(monkeypatch)
+def test_admin_route_rejects_invalid_bearer_token() -> None:
+    client, conn = build_client()
+    add_admin_and_provider_tokens(conn)
 
-    response = client.get("/admin/applications/MYH%202024%2F1/notes", headers={"X-Admin-Token": "wrong"})
+    response = client.get("/admin/applications/MYH%202024%2F1/notes", headers={"Authorization": "Bearer wrong"})
 
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "unauthorized"
 
 
-def test_admin_route_accepts_admin_bearer_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Admin-note routes should now accept the standard Authorization bearer token."""
+def test_static_admin_header_no_longer_grants_access() -> None:
+    """The retired local admin header must not pass the admin auth boundary."""
+    client, conn = build_client()
+    add_admin_and_provider_tokens(conn)
+
+    response = client.get("/admin/applications/MYH%202024%2F1/notes", headers={"X-Admin-Token": "admin-token"})
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "unauthorized"
+
+
+def test_admin_route_accepts_admin_bearer_token(monkeypatch) -> None:
     monkeypatch.setattr(admin, "list_application_notes", lambda conn, diarienummer: [])
-    client = build_client(monkeypatch)
+    client, conn = build_client()
+    add_admin_and_provider_tokens(conn)
 
     response = client.get(
         "/admin/applications/MYH%202024%2F1/notes",
-        headers={"Authorization": "Bearer test-token"},
+        headers={"Authorization": "Bearer admin-token"},
     )
 
     assert response.status_code == 200
     assert response.json() == []
 
 
-def test_admin_route_rejects_provider_bearer_token_with_403(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A valid provider principal must not pass admin-only authorization."""
-    monkeypatch.setenv(PROVIDER_TOKEN_ENV_VAR, "provider-token")
-    monkeypatch.setenv(PROVIDER_ID_ENV_VAR, "999999")
-    client = build_client(monkeypatch)
+def test_admin_route_rejects_provider_bearer_token_with_403() -> None:
+    client, conn = build_client()
+    add_admin_and_provider_tokens(conn)
 
     response = client.get(
         "/admin/applications/MYH%202024%2F1/notes",
-        headers={"Authorization": "Bearer provider-token", "X-Request-ID": "provider-admin-123"},
+        headers={"Authorization": "Bearer provider-token", REQUEST_ID_HEADER: "provider-admin-123"},
     )
 
     assert response.status_code == 403
-    assert response.headers["X-Request-ID"] == "provider-admin-123"
+    assert response.headers[REQUEST_ID_HEADER] == "provider-admin-123"
     payload = response.json()
     assert payload["error"]["code"] == "forbidden"
     assert payload["error"]["request_id"] == "provider-admin-123"
     assert "provider-token" not in response.text
 
 
-def test_list_admin_notes_accepts_correct_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A correct token should allow protected read access to local notes."""
+def test_list_admin_notes_accepts_admin_token(monkeypatch) -> None:
     monkeypatch.setattr(
         admin,
         "list_application_notes",
@@ -102,21 +115,25 @@ def test_list_admin_notes_accepts_correct_token(monkeypatch: pytest.MonkeyPatch)
             }
         ],
     )
-    client = build_client(monkeypatch)
+    client, conn = build_client()
+    add_admin_and_provider_tokens(conn)
 
-    response = client.get("/admin/applications/MYH%202024%2F1/notes", headers={"X-Admin-Token": "test-token"})
+    response = client.get(
+        "/admin/applications/MYH%202024%2F1/notes",
+        headers={"Authorization": "Bearer admin-token"},
+    )
 
     assert response.status_code == 200
     assert response.json()[0]["diarienummer"] == "MYH 2024/1"
 
 
-def test_create_admin_note_returns_400_for_blank_text(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Empty notes should be rejected with the documented 400 status."""
-    client = build_client(monkeypatch)
+def test_create_admin_note_returns_400_for_blank_text() -> None:
+    client, conn = build_client()
+    add_admin_and_provider_tokens(conn)
 
     response = client.post(
         "/admin/applications/MYH%202024%2F1/notes",
-        headers={"X-Admin-Token": "test-token"},
+        headers={"Authorization": "Bearer admin-token"},
         json={"note_text": "   "},
     )
 
@@ -124,14 +141,14 @@ def test_create_admin_note_returns_400_for_blank_text(monkeypatch: pytest.Monkey
     assert "note_text" in response.json()["detail"]
 
 
-def test_create_admin_note_returns_404_for_missing_application(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Writes should validate the application before creating local metadata."""
+def test_create_admin_note_returns_404_for_missing_application(monkeypatch) -> None:
     monkeypatch.setattr(admin, "create_application_note", lambda conn, diarienummer, note_text: None)
-    client = build_client(monkeypatch)
+    client, conn = build_client()
+    add_admin_and_provider_tokens(conn)
 
     response = client.post(
         "/admin/applications/MISSING/notes",
-        headers={"X-Admin-Token": "test-token"},
+        headers={"Authorization": "Bearer admin-token"},
         json={"note_text": "Follow up."},
     )
 
@@ -139,8 +156,7 @@ def test_create_admin_note_returns_404_for_missing_application(monkeypatch: pyte
     assert "Application" in response.json()["detail"]
 
 
-def test_create_update_and_delete_admin_note_with_mocked_service(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The admin CRUD routes should return the service-layer payloads."""
+def test_create_update_and_delete_admin_note_with_mocked_service(monkeypatch) -> None:
     created_note: dict[str, Any] = {
         "id": 3,
         "diarienummer": "MYH 2024/1",
@@ -152,8 +168,9 @@ def test_create_update_and_delete_admin_note_with_mocked_service(monkeypatch: py
     monkeypatch.setattr(admin, "create_application_note", lambda conn, diarienummer, note_text: created_note)
     monkeypatch.setattr(admin, "update_application_note", lambda conn, note_id, note_text: updated_note)
     monkeypatch.setattr(admin, "delete_application_note", lambda conn, note_id: True)
-    client = build_client(monkeypatch)
-    headers = {"X-Admin-Token": "test-token"}
+    client, conn = build_client()
+    add_admin_and_provider_tokens(conn)
+    headers = {"Authorization": "Bearer admin-token"}
 
     create_response = client.post(
         "/admin/applications/MYH%202024%2F1/notes",
@@ -174,33 +191,41 @@ def test_create_update_and_delete_admin_note_with_mocked_service(monkeypatch: py
     assert delete_response.json() == {"note_id": 3, "deleted": True}
 
 
-def test_update_admin_note_returns_404_when_note_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Updating a missing note should be clear."""
+def test_update_admin_note_returns_404_when_note_missing(monkeypatch) -> None:
     monkeypatch.setattr(admin, "update_application_note", lambda conn, note_id, note_text: None)
-    client = build_client(monkeypatch)
+    client, conn = build_client()
+    add_admin_and_provider_tokens(conn)
 
-    response = client.put("/admin/notes/999", headers={"X-Admin-Token": "test-token"}, json={"note_text": "Updated."})
+    response = client.put(
+        "/admin/notes/999",
+        headers={"Authorization": "Bearer admin-token"},
+        json={"note_text": "Updated."},
+    )
 
     assert response.status_code == 404
     assert "Admin note" in response.json()["detail"]
 
 
-def test_patch_admin_note_returns_400_for_empty_patch_body(monkeypatch: pytest.MonkeyPatch) -> None:
-    """PATCH should reject empty bodies because there is no field to update."""
-    client = build_client(monkeypatch)
+def test_patch_admin_note_returns_400_for_empty_patch_body() -> None:
+    client, conn = build_client()
+    add_admin_and_provider_tokens(conn)
 
-    response = client.patch("/admin/notes/3", headers={"X-Admin-Token": "test-token"}, json={})
+    response = client.patch("/admin/notes/3", headers={"Authorization": "Bearer admin-token"}, json={})
 
     assert response.status_code == 400
     assert "note_text" in response.json()["detail"]
 
 
-def test_patch_admin_note_returns_404_when_note_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    """PATCH should return the same clear missing-note behavior as PUT."""
+def test_patch_admin_note_returns_404_when_note_missing(monkeypatch) -> None:
     monkeypatch.setattr(admin, "update_application_note", lambda conn, note_id, note_text: None)
-    client = build_client(monkeypatch)
+    client, conn = build_client()
+    add_admin_and_provider_tokens(conn)
 
-    response = client.patch("/admin/notes/999", headers={"X-Admin-Token": "test-token"}, json={"note_text": "Updated."})
+    response = client.patch(
+        "/admin/notes/999",
+        headers={"Authorization": "Bearer admin-token"},
+        json={"note_text": "Updated."},
+    )
 
     assert response.status_code == 404
     assert "Admin note" in response.json()["detail"]
