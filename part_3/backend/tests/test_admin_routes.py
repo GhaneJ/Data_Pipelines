@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from backend.app.dependencies import get_db_connection
 from backend.app.main import create_app
 from backend.app.routers import admin
-from backend.app.security import ADMIN_TOKEN_ENV_VAR
+from backend.app.auth.token_store import ADMIN_TOKEN_ENV_VAR, PROVIDER_ID_ENV_VAR, PROVIDER_TOKEN_ENV_VAR
 
 
 class DummyConnection:
@@ -38,16 +38,53 @@ def test_admin_route_rejects_missing_token(monkeypatch: pytest.MonkeyPatch) -> N
     response = client.get("/admin/applications/MYH%202024%2F1/notes")
 
     assert response.status_code == 401
-    assert "X-Admin-Token" in response.json()["detail"]
+    payload = response.json()
+    assert payload["error"]["code"] == "unauthorized"
+    assert payload["detail"] == "Authentication is required."
+    assert "X-Request-ID" in response.headers
 
 
-def test_admin_route_rejects_wrong_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Wrong admin tokens should not reach the service layer."""
+def test_admin_route_rejects_wrong_x_admin_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Wrong X-Admin-Token values should not reach the service layer."""
     client = build_client(monkeypatch)
 
     response = client.get("/admin/applications/MYH%202024%2F1/notes", headers={"X-Admin-Token": "wrong"})
 
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "unauthorized"
+
+
+def test_admin_route_accepts_admin_bearer_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Admin-note routes should now accept the standard Authorization bearer token."""
+    monkeypatch.setattr(admin, "list_application_notes", lambda conn, diarienummer: [])
+    client = build_client(monkeypatch)
+
+    response = client.get(
+        "/admin/applications/MYH%202024%2F1/notes",
+        headers={"Authorization": "Bearer test-token"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_admin_route_rejects_provider_bearer_token_with_403(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A valid provider principal must not pass admin-only authorization."""
+    monkeypatch.setenv(PROVIDER_TOKEN_ENV_VAR, "provider-token")
+    monkeypatch.setenv(PROVIDER_ID_ENV_VAR, "999999")
+    client = build_client(monkeypatch)
+
+    response = client.get(
+        "/admin/applications/MYH%202024%2F1/notes",
+        headers={"Authorization": "Bearer provider-token", "X-Request-ID": "provider-admin-123"},
+    )
+
     assert response.status_code == 403
+    assert response.headers["X-Request-ID"] == "provider-admin-123"
+    payload = response.json()
+    assert payload["error"]["code"] == "forbidden"
+    assert payload["error"]["request_id"] == "provider-admin-123"
+    assert "provider-token" not in response.text
 
 
 def test_list_admin_notes_accepts_correct_token(monkeypatch: pytest.MonkeyPatch) -> None:

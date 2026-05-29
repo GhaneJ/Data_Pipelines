@@ -73,8 +73,8 @@ def test_protected_admin_route_without_token_still_rejects_access(monkeypatch) -
     payload = response.json()
     assert payload["error"]["code"] == "unauthorized"
     assert payload["error"]["request_id"] == "admin-123"
-    assert "X-Admin-Token" in payload["error"]["message"]
-    assert "X-Admin-Token" in payload["detail"]
+    assert payload["error"]["message"] == "Authentication is required."
+    assert payload["detail"] == "Authentication is required."
 
 
 def test_unhandled_exception_returns_safe_error_envelope() -> None:

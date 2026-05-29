@@ -45,6 +45,7 @@ def test_expected_routes_are_registered() -> None:
         "/operations/source-status",
         "/operations/check-source",
         "/refresh",
+        "/auth/whoami",
         "/admin/applications/{diarienummer:path}/notes",
         "/admin/notes/{note_id}",
     }

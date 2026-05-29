@@ -4,7 +4,7 @@
 
 Part 3 turns the curated Part 2 MYH applications dataset into a small internal data service.
 
-The project shows the path from a trusted curated dataset to PostgreSQL storage, a FastAPI API, protected admin metadata operations, a React + TypeScript dashboard that consumes the public API, and now a cross-cutting middleware/error foundation for safer future security work. The remaining roadmap adds authentication, API keys, provider/admin workflows, operational hardening, and a small explainable ML layer in staged steps. The implementation stays practical and explainable while using normal professional structure where it solves real project problems.
+The project shows the path from a trusted curated dataset to PostgreSQL storage, a FastAPI API, protected admin metadata operations, a React + TypeScript dashboard that consumes the public API, a cross-cutting middleware/error foundation, and now centralized token authentication with role-based authorization. The remaining roadmap adds API keys, provider/admin workflows, operational hardening, and a small explainable ML layer in staged steps. The implementation stays practical and explainable while using normal professional structure where it solves real project problems.
 
 ## Source of truth
 
@@ -25,13 +25,13 @@ Main grain: one application record per diarienummer
 
 Sub-project 3.11 added a controlled MYH source-check foundation. It can inspect the configured official MYH result page, record a local source-status manifest, and help decide whether the local curated CSV may be stale. It does **not** automatically download new Excel files or overwrite the curated dataset.
 
-Sub-project 3.12 adds a protected admin write use case: local application notes stored in a separate metadata table. Admin notes do **not** modify the curated MYH source data and require a configured `PART3_ADMIN_TOKEN` sent as `X-Admin-Token`.
+Sub-project 3.12 added a protected admin write use case: local application notes stored in a separate metadata table. Admin notes do **not** modify the curated MYH source data. Sub-project 3.15 migrates their protection to the centralized auth/RBAC layer while preserving `X-Admin-Token` as a local compatibility bridge.
 
 Sub-project 3.12.1 adds safe database seeder/startup initialization. The PostgreSQL database itself must already exist, and `DATABASE_URL` must point to it. When the FastAPI app starts, the backend safely checks/creates all project-managed tables and indexes through code. Startup does not reload, truncate, delete, or overwrite curated application data or admin notes.
 
 Sub-project 3.13 adds a React + TypeScript dashboard under `frontend/`. It consumes public backend endpoints for health, database readiness, statistics, trends, filtered application browsing, and application detail. Protected admin-note endpoints are intentionally not exposed in the public dashboard.
 
-Sub-project 3.14 adds request IDs, safe request logging, and standardized error envelopes before the larger authentication, authorization, API-key, and provider/admin workflow layers. It does not implement login, API keys, provider CRUD, admin review workflow, or ML.
+Sub-project 3.14 adds request IDs, safe request logging, and standardized error envelopes. Sub-project 3.15 adds centralized bearer-token authentication, a safe authenticated principal model, reusable role-based authorization dependencies, `/auth/whoami`, provider-token support, and admin-note migration to RBAC. It does not implement login/password flows, JWT/OAuth, API keys, provider CRUD, admin review workflow, authenticated frontend workspace, or ML.
 
 ## Implementation principles
 
@@ -44,11 +44,11 @@ Sub-project 3.14 adds request IDs, safe request logging, and standardized error 
 - Add structure only when it improves maintainability, validation, operations, or later roadmap work.
 - Keep generated runtime files and internal handoff/control files outside Git tracking.
 
-## Current project shape after Sub-project 3.14
+## Current project shape after Sub-project 3.15
 
 Sub-project 3.10 reorganized the backend into routers and services, added database readiness checks, logging, centralized database-error handling, and focused pytest coverage.
 
-Sub-project 3.11 added a modest scheduled-source-check foundation and refresh metadata upgrade. Sub-project 3.12 added protected admin notes as a safe write-side use case. Sub-project 3.12.1 added safe startup schema initialization with a single SQL schema source of truth. Sub-project 3.13 added the React + TypeScript visualization dashboard and minimal local-development CORS support for the Vite dev server. Sub-project 3.14 adds request-context middleware, request logging middleware, and centralized safe error responses.
+Sub-project 3.11 added a modest scheduled-source-check foundation and refresh metadata upgrade. Sub-project 3.12 added protected admin notes as a safe write-side use case. Sub-project 3.12.1 added safe startup schema initialization with a single SQL schema source of truth. Sub-project 3.13 added the React + TypeScript visualization dashboard and minimal local-development CORS support for the Vite dev server. Sub-project 3.14 added request-context middleware, request logging middleware, and centralized safe error responses. Sub-project 3.15 adds centralized bearer-token authentication and role-based authorization for admin and provider principals.
 
 ```text
 part_3/
@@ -90,7 +90,12 @@ part_3/
       main.py
       queries.py                 # compatibility exports for older imports
       schemas.py
-      security.py                # simple PART3_ADMIN_TOKEN / X-Admin-Token dependency
+      auth/
+        __init__.py
+        dependencies.py          # bearer auth and reusable RBAC dependencies
+        models.py                # safe authenticated principal and roles
+        routes.py                # /auth/whoami
+        token_store.py           # environment-backed local token mapping
       core/
         errors.py                # standard API error envelope helpers
       middleware/
@@ -130,6 +135,8 @@ part_3/
       indexes.sql                  # safe CREATE INDEX IF NOT EXISTS indexes
     tests/
       test_admin_auth.py
+      test_auth_dependencies.py
+      test_auth_routes.py
       test_admin_notes_service.py
       test_admin_routes.py
       test_check_source_status_script.py
@@ -272,7 +279,7 @@ Standard API errors now use this envelope:
 
 The top-level `detail` field is kept for compatibility with existing FastAPI/browser helpers, while new code should use the `error` object. The handlers preserve important status codes such as 400, 401, 403, 404, 422, 500, and 503, and avoid exposing stack traces or internal database exception details.
 
-3.14 prepares for authentication and API keys, but it does not implement them.
+3.15 uses this foundation for token authentication and RBAC. API keys are still not implemented; they are planned for 3.16.
 
 ## React + TypeScript dashboard
 
@@ -296,7 +303,7 @@ Frontend features:
 - selected application detail panel using `/applications/{diarienummer}`,
 - loading, empty, and error states for demo safety.
 
-Protected admin-note endpoints are not called by the React dashboard. They remain backend/API features tested separately with `PART3_ADMIN_TOKEN` and `X-Admin-Token`.
+Protected admin-note endpoints are not called by the React dashboard. They remain backend/API features tested separately with `PART3_ADMIN_TOKEN`, `Authorization: Bearer <token>`, and the supported `X-Admin-Token` header.
 
 ### Start the frontend
 
@@ -414,9 +421,64 @@ Generated source manifests are local runtime files and should not be committed:
 backend/runtime/source_status.json
 ```
 
+## Authentication and role-based authorization
+
+Sub-project 3.15 adds a centralized backend auth/RBAC layer. It uses local environment-configured bearer tokens instead of users, passwords, JWTs, sessions, or OAuth. This is not full production identity management, but it is real centralized API authentication and authorization for this project.
+
+Supported local environment variables:
+
+```text
+PART3_ADMIN_TOKEN=<your-local-admin-token>
+PART3_PROVIDER_TOKEN=<your-local-provider-token>
+PART3_PROVIDER_ID=<provider-id-for-local-provider>
+```
+
+Supported roles:
+
+```text
+admin
+provider
+```
+
+A valid token maps to a safe principal such as:
+
+```json
+{
+  "subject": "local-admin",
+  "role": "admin",
+  "provider_id": null
+}
+```
+
+Provider example:
+
+```json
+{
+  "subject": "local-provider",
+  "role": "provider",
+  "provider_id": "999999"
+}
+```
+
+Raw token values are never returned in JSON responses and should not be logged. Standard auth uses:
+
+```text
+Authorization: Bearer <token>
+```
+
+Auth inspection endpoint:
+
+```text
+GET /auth/whoami
+```
+
+`/auth/whoami` requires a valid bearer token and returns only the safe principal. Missing, malformed, or invalid bearer tokens return a standardized 401 error envelope. Valid credentials with the wrong role return a standardized 403 error envelope. Auth error responses include `X-Request-ID` and the same request ID inside the `error` object.
+
+API keys are not implemented in 3.15 and are planned for 3.16. Provider CRUD, admin review workflow, and authenticated React admin/provider workspaces are also not implemented in 3.15.
+
 ## Protected admin application notes
 
-Sub-project 3.12 adds one small write-side feature under `/admin`: local notes linked to application `diarienummer` values. Public read endpoints remain public. Admin note text is only available through protected `/admin` endpoints.
+Sub-project 3.12 added one small write-side feature under `/admin`: local notes linked to application `diarienummer` values. Public read endpoints remain public. Admin note text is only available through protected `/admin` endpoints. Sub-project 3.15 migrates these endpoints to the centralized RBAC dependency.
 
 Configuration:
 
@@ -424,11 +486,19 @@ Configuration:
 PART3_ADMIN_TOKEN=<your-local-token>
 ```
 
-Protected requests must include:
+Preferred protected requests include:
+
+```text
+Authorization: Bearer <your-local-token>
+```
+
+The old local compatibility bridge is still accepted for admin-note endpoints:
 
 ```text
 X-Admin-Token: <your-local-token>
 ```
+
+If both headers are provided, `Authorization: Bearer <token>` is preferred.
 
 Admin note endpoints:
 
@@ -445,7 +515,10 @@ DELETE /admin/notes/{note_id}
 Example calls, with URL-encoded `diarienummer` when it contains spaces or slashes:
 
 ```bash
-curl -H "X-Admin-Token: <your-local-token>" \
+curl -H "Authorization: Bearer <your-local-token>" \
+  "http://127.0.0.1:8000/auth/whoami"
+
+curl -H "Authorization: Bearer <your-local-token>" \
   "http://127.0.0.1:8000/admin/applications/MYH%202024%2F1/notes"
 
 curl -H "X-Admin-Token: <your-local-token>" \
@@ -472,9 +545,11 @@ Safety boundaries:
 - the curated `applications` table is not overwritten by admin notes,
 - notes are stored in the separate `application_notes` table,
 - the service validates that an application exists before creating or listing notes,
-- missing or wrong request tokens return clear auth errors,
-- a missing server token returns a clear configuration error,
-- there are no users, login pages, sessions, OAuth flows, or passwords.
+- missing, malformed, or invalid bearer tokens return clear 401 auth errors,
+- valid provider tokens cannot access admin-only routes and receive 403,
+- missing server admin token returns a clear configuration error for admin-only routes,
+- the `X-Admin-Token` header remains supported for existing local admin-note workflows,
+- there are no users, login pages, sessions, OAuth flows, JWTs, or passwords.
 
 ## Filters and exports
 
@@ -625,7 +700,7 @@ To include the operational refresh call in the demo sequence:
 python backend/scripts/demo_api.py --include-refresh
 ```
 
-## Expanded roadmap after 3.14
+## Expanded roadmap after 3.15
 
 The assignment remains the baseline for required deliverables, but the assessor has allowed stronger additions when they remain explainable at vocational/YH-student level and improve the final project/demo value.
 
@@ -638,8 +713,8 @@ Current roadmap:
 3.12.1 Database Seeder Initialization — completed
 3.13 React + TypeScript Visualization and Trend Dashboard — completed
 3.14 Cross-cutting API Middleware Foundation — completed
-3.15 Token Authentication and Role-Based Authorization — next
-3.16 API Key Access System
+3.15 Portfolio-Grade Token Authentication and Role-Based Authorization — completed
+3.16 API Key Access System — next
 3.17 Provider Application Submission CRUD API
 3.18 Admin Review and Decision Workflow API
 3.19 Authenticated React Admin and Provider Workspace
@@ -654,7 +729,7 @@ Guiding rule:
 Vocational level means explainable and proportionate, not toy-like or artificially weak. Use normal professional structure when it improves correctness, maintainability, robustness, operations, or presentation value.
 ```
 
-The React dashboard is implemented and consumes public read/statistics endpoints. The middleware/error foundation is now in place for future security and workflow layers. Token authentication, role-based authorization, API keys, provider CRUD, admin review workflows, authenticated React workspaces, and ML are still not implemented yet; they are planned for later sub-projects.
+The React dashboard is implemented and consumes public read/statistics endpoints. Central token authentication and role-based authorization are now in place for backend routes. API keys, provider CRUD, admin review workflows, authenticated React workspaces, and ML are still not implemented yet; they are planned for later sub-projects.
 
 ## Git policy
 

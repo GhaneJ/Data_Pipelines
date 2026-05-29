@@ -6,7 +6,7 @@ Sub-projects 3.2-3.8 built the working backend gradually: PostgreSQL storage, co
 
 Sub-project 3.10 reorganized that backend into a clearer structure and added database readiness checks, simple logging, centralized database-error handling, and focused pytest coverage.
 
-Sub-project 3.11 added a scheduler-ready MYH source-check foundation, local source-status manifest, source-check operation endpoints, refresh metadata, a manual source-check script, and focused tests that do not depend on live internet access. Sub-project 3.12 adds protected admin application notes as a small safe write-side use case. Sub-project 3.12.1 adds safe database seeder/startup initialization with SQL files as the single schema source of truth. Sub-project 3.13 adds minimal local-development CORS support so the React/Vite dashboard can call the public API from the browser. Sub-project 3.14 adds request IDs, safe request logging, and standardized API error envelopes before the authentication/API-key roadmap begins.
+Sub-project 3.11 added a scheduler-ready MYH source-check foundation, local source-status manifest, source-check operation endpoints, refresh metadata, a manual source-check script, and focused tests that do not depend on live internet access. Sub-project 3.12 adds protected admin application notes as a small safe write-side use case. Sub-project 3.12.1 adds safe database seeder/startup initialization with SQL files as the single schema source of truth. Sub-project 3.13 adds minimal local-development CORS support so the React/Vite dashboard can call the public API from the browser. Sub-project 3.14 adds request IDs, safe request logging, and standardized API error envelopes. Sub-project 3.15 adds centralized bearer-token authentication, safe admin/provider principals, `/auth/whoami`, and reusable role-based authorization dependencies.
 
 ## Technology choices
 
@@ -20,7 +20,8 @@ The backend uses:
 - pytest for focused backend tests,
 - narrow local-development CORS for the React dashboard,
 - request-id middleware and safe request logging,
-- standardized safe API error responses.
+- standardized safe API error responses,
+- centralized bearer-token authentication and role-based authorization.
 
 No ORM is used.
 
@@ -36,6 +37,11 @@ backend/
     logging_config.py        simple local logging setup
     schemas.py               response models
     queries.py               compatibility exports for older imports
+    auth/
+      dependencies.py        bearer-token parsing and RBAC dependencies
+      models.py              safe principal and role models
+      routes.py              /auth/whoami inspection endpoint
+      token_store.py         environment-backed local token mapping
     core/
       errors.py              standard API error envelope helpers
     middleware/
@@ -48,7 +54,7 @@ backend/
       providers.py           provider browsing routes
       export.py              CSV export route
       operations.py          refresh and source-check operation routes
-      admin.py               protected admin-note routes
+      admin.py               RBAC-protected admin-note routes
     services/
       common.py              shared filters and SQL helpers
       applications.py        application browsing and lookup queries
@@ -73,6 +79,8 @@ backend/
     check_source_status.py
   tests/
     test_admin_auth.py
+    test_auth_dependencies.py
+    test_auth_routes.py
     test_admin_notes_service.py
     test_admin_routes.py
     test_check_source_status_script.py
@@ -89,7 +97,7 @@ backend/
     test_source_check_service.py
 ```
 
-`main.py` should stay small. New endpoint work should normally go into a router, with database/query or operation logic placed in a service module. Cross-cutting behavior belongs in `middleware/`, `core/`, `exception_handlers.py`, and `logging_config.py`. The next implementation layer is token authentication and role-based authorization.
+`main.py` should stay small. New endpoint work should normally go into a router, with database/query or operation logic placed in a service module. Cross-cutting behavior belongs in `auth/`, `middleware/`, `core/`, `exception_handlers.py`, and `logging_config.py`. The next implementation layer is API key access, not another one-off auth check.
 
 ## Install dependencies
 
@@ -254,7 +262,7 @@ http://127.0.0.1:8000/docs
 
 ## Request IDs, request logging, and API errors
 
-Sub-project 3.14 adds a cross-cutting middleware/error foundation for the backend. It is meant to support future authentication, API keys, provider CRUD, and admin workflows without implementing those features yet.
+Sub-project 3.14 adds a cross-cutting middleware/error foundation for the backend. Sub-project 3.15 uses that foundation for centralized token authentication and role-based authorization. API keys, provider CRUD, admin review workflow, and authenticated React workspaces remain planned later.
 
 ### Request IDs
 
@@ -318,7 +326,7 @@ http://localhost:5173
 http://127.0.0.1:5173
 ```
 
-Allowed methods are limited to `GET` and `OPTIONS`, which is enough for the public dashboard endpoints. This does not expose admin tokens, does not weaken `PART3_ADMIN_TOKEN`, and does not change protected `/admin` behavior.
+Allowed methods are limited to `GET` and `OPTIONS`, which is enough for the public dashboard endpoints. This does not expose admin tokens and does not make protected `/admin` behavior public.
 
 The React dashboard uses public endpoints only:
 
@@ -391,9 +399,50 @@ Use `/health` for quick “is the API process alive?” checks. Use `/health/db`
 | --- | --- |
 | `GET /export/applications` | Returns a downloadable filtered CSV export. |
 
+## Authentication and role-based authorization
+
+Sub-project 3.15 adds a centralized auth/RBAC layer for the backend. The project uses environment-configured bearer tokens, not users, passwords, sessions, OAuth, JWTs, or database user accounts. This is not full production identity management, but it is a real backend security boundary for this portfolio project.
+
+Environment variables:
+
+```text
+PART3_ADMIN_TOKEN=<local-admin-token>
+PART3_PROVIDER_TOKEN=<local-provider-token>
+PART3_PROVIDER_ID=<provider-id-for-local-provider>
+```
+
+Standard request format:
+
+```text
+Authorization: Bearer <token>
+```
+
+Roles:
+
+```text
+admin
+provider
+```
+
+The central principal model contains only safe identity and authorization metadata:
+
+```json
+{
+  "subject": "local-admin",
+  "role": "admin",
+  "provider_id": null
+}
+```
+
+`GET /auth/whoami` requires a valid bearer token and returns the current principal without exposing the token. Admin tokens map to `role: "admin"`. Provider tokens map to `role: "provider"` and include `provider_id` when configured.
+
+Auth failures use the standardized error envelope from the 3.14 error system. Missing, malformed, and invalid bearer tokens return 401. Valid credentials with the wrong role return 403. All responses still include `X-Request-ID`; error bodies include the same request ID. Token values are not returned by the API and should not appear in request logs.
+
+API keys are not implemented in 3.15 and are planned for 3.16. Provider CRUD, admin review/decision workflow, and authenticated React admin/provider pages are not implemented in 3.15.
+
 ## Protected admin application notes
 
-Sub-project 3.12 adds a small local write-side feature under `/admin`. It is deliberately not a login system. The server reads one configured token from `PART3_ADMIN_TOKEN`, and callers send the same value in the `X-Admin-Token` header.
+Sub-project 3.12 adds a small local write-side feature under `/admin`. Sub-project 3.15 protects those routes with the centralized admin RBAC dependency. The server reads the configured admin token from `PART3_ADMIN_TOKEN`.
 
 PowerShell example:
 
@@ -407,10 +456,13 @@ Bash/macOS/Linux example:
 export PART3_ADMIN_TOKEN="dev-admin-token"
 ```
 
-Example protected calls:
+Preferred protected calls:
 
 ```bash
-curl -H "X-Admin-Token: dev-admin-token" \
+curl -H "Authorization: Bearer dev-admin-token" \
+  "http://127.0.0.1:8000/auth/whoami"
+
+curl -H "Authorization: Bearer dev-admin-token" \
   "http://127.0.0.1:8000/admin/applications/MYH%202024%2F1/notes"
 
 curl -H "X-Admin-Token: dev-admin-token" \
@@ -437,12 +489,14 @@ curl -H "X-Admin-Token: dev-admin-token" \
 
 The note table is `application_notes`. It stores local admin metadata only. It does not change `applications` or any MYH source file. The service validates that a `diarienummer` exists before writing or listing notes. `PUT` replaces the note text. `PATCH` supports partial update semantics; because the current model has one editable field, it updates `note_text` when provided and rejects an empty body with `400`.
 
-Auth behavior:
+Admin-token behavior:
 
-- missing `PART3_ADMIN_TOKEN` on the server: protected admin endpoints return a clear configuration error,
-- missing `X-Admin-Token`: unauthorized,
-- wrong `X-Admin-Token`: forbidden,
-- correct token: the endpoint proceeds to the note operation.
+- `Authorization: Bearer <PART3_ADMIN_TOKEN>` is the preferred admin-note authentication method,
+- `X-Admin-Token: <PART3_ADMIN_TOKEN>` is still accepted for local admin-note workflows,
+- if both headers are present, `Authorization` is preferred,
+- missing or invalid credentials return 401,
+- valid provider credentials on admin-only routes return 403,
+- missing `PART3_ADMIN_TOKEN` on the server makes protected admin endpoints return a clear configuration error.
 
 ## Common example requests
 
@@ -623,11 +677,11 @@ python backend/scripts/demo_api.py
 python backend/scripts/demo_api.py --print-only
 ```
 
-The smoke test checks the root endpoint, `/health`, `/health/db`, `/operations/source-status`, refresh, core browsing/statistics/provider/export endpoints, and important guardrails. Admin-note endpoints are shown in the demo helper but are not required by the smoke test unless you choose to test them manually with `PART3_ADMIN_TOKEN`.
+The smoke test checks the root endpoint, `/health`, `/health/db`, `/operations/source-status`, refresh, core browsing/statistics/provider/export endpoints, and important guardrails. Admin-note endpoints are shown in the demo helper but are not required by the smoke test unless you choose to test them manually with `PART3_ADMIN_TOKEN`, `Authorization: Bearer <token>`, or the supported `X-Admin-Token` header.
 
-## 3.14 scope boundary
+## 3.15 scope boundary
 
-Implemented by the end of 3.14:
+Implemented by the end of 3.15:
 
 - MYH source-check service,
 - local JSON manifest support,
@@ -639,7 +693,9 @@ Implemented by the end of 3.14:
 - README/control-file updates,
 - protected admin application notes under `/admin`,
 - `application_notes` local metadata table,
-- admin token dependency using `PART3_ADMIN_TOKEN` and `X-Admin-Token`,
+- centralized bearer-token auth and RBAC with admin/provider principals,
+- `/auth/whoami`,
+- migrated admin-note protection with `Authorization: Bearer <PART3_ADMIN_TOKEN>` and `X-Admin-Token` compatibility,
 - safe startup database seeder through `schema.sql` and `indexes.sql`,
 - React + TypeScript dashboard in `part_3/frontend`,
 - local-development CORS for the Vite dashboard,
@@ -648,10 +704,8 @@ Implemented by the end of 3.14:
 - standardized safe error response envelopes,
 - focused middleware and error-handler tests.
 
-Still not implemented after 3.14:
+Still not implemented after 3.15:
 
-- token authentication or user accounts,
-- role-based authorization,
 - API key management,
 - provider-submitted application CRUD,
 - admin review/decision workflow,
