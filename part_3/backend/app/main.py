@@ -70,8 +70,8 @@ def create_app(*, run_startup_seeder: bool = True) -> FastAPI:
 
     app = FastAPI(
         title="MYH Applications API",
-        version="0.3.15",
-        description="Read, operational, protected-admin, and token-authenticated API for the curated MYH applications dataset stored in PostgreSQL.",
+        version="0.3.15.1",
+        description="Read, operational, protected-admin, and database-authenticated API for the curated MYH applications dataset stored in PostgreSQL.",
         lifespan=build_lifespan(run_startup_seeder),
     )
     register_exception_handlers(app)

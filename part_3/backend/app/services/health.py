@@ -17,6 +17,8 @@ REQUIRED_TABLES = (
     "principal_types",
     "study_forms",
     "application_notes",
+    "auth_users",
+    "auth_access_tokens",
 )
 
 LOOKUP_TABLES = (

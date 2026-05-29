@@ -43,3 +43,21 @@ CREATE INDEX IF NOT EXISTS idx_study_forms_name
 
 CREATE INDEX IF NOT EXISTS idx_application_notes_diarienummer
     ON application_notes (diarienummer);
+
+CREATE INDEX IF NOT EXISTS idx_auth_users_username
+    ON auth_users (username);
+
+CREATE INDEX IF NOT EXISTS idx_auth_users_role
+    ON auth_users (role);
+
+CREATE INDEX IF NOT EXISTS idx_auth_users_provider_id
+    ON auth_users (provider_id);
+
+CREATE INDEX IF NOT EXISTS idx_auth_access_tokens_token_hash
+    ON auth_access_tokens (token_hash);
+
+CREATE INDEX IF NOT EXISTS idx_auth_access_tokens_user_id
+    ON auth_access_tokens (user_id);
+
+CREATE INDEX IF NOT EXISTS idx_auth_access_tokens_expires_at
+    ON auth_access_tokens (expires_at);
