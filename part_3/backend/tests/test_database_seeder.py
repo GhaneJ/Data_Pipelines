@@ -53,6 +53,8 @@ def test_project_managed_table_list_is_complete() -> None:
         "providers",
         "study_forms",
         "application_notes",
+        "auth_users",
+        "auth_access_tokens",
     }
 
 
@@ -131,3 +133,56 @@ def test_missing_database_url_is_reported_clearly(monkeypatch: pytest.MonkeyPatc
 
     with pytest.raises(DatabaseConfigurationError, match="DATABASE_URL is not set"):
         database_seeder.ensure_database_ready()
+
+
+def test_auth_bootstrap_creates_admin_and_provider_users(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Bootstrap env vars should create hashed local auth users idempotently."""
+    from backend.tests.auth_test_utils import FakeAuthConnection
+
+    conn = FakeAuthConnection()
+    monkeypatch.setenv(database_seeder.BOOTSTRAP_ADMIN_USERNAME_ENV_VAR, "admin")
+    monkeypatch.setenv(database_seeder.BOOTSTRAP_ADMIN_PASSWORD_ENV_VAR, "admin-password")
+    monkeypatch.setenv(database_seeder.BOOTSTRAP_ADMIN_DISPLAY_NAME_ENV_VAR, "Local Admin")
+    monkeypatch.setenv(database_seeder.BOOTSTRAP_PROVIDER_USERNAME_ENV_VAR, "provider")
+    monkeypatch.setenv(database_seeder.BOOTSTRAP_PROVIDER_PASSWORD_ENV_VAR, "provider-password")
+    monkeypatch.setenv(database_seeder.BOOTSTRAP_PROVIDER_DISPLAY_NAME_ENV_VAR, "Local Provider")
+    monkeypatch.setenv(database_seeder.BOOTSTRAP_PROVIDER_ID_ENV_VAR, "999999")
+
+    first = database_seeder.seed_auth_bootstrap_users(conn)
+    second = database_seeder.seed_auth_bootstrap_users(conn)
+
+    assert first == {"admin": "created", "provider": "created"}
+    assert second == {"admin": "already_exists", "provider": "already_exists"}
+    assert conn.users_by_username["admin"]["role"] == "admin"
+    assert conn.users_by_username["admin"]["provider_id"] is None
+    assert conn.users_by_username["provider"]["role"] == "provider"
+    assert conn.users_by_username["provider"]["provider_id"] == "999999"
+    assert conn.users_by_username["admin"]["password_hash"] != "admin-password"
+    assert conn.users_by_username["provider"]["password_hash"] != "provider-password"
+
+
+def test_provider_bootstrap_requires_provider_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Provider bootstrap must not create an orphan provider user."""
+    from backend.tests.auth_test_utils import FakeAuthConnection
+
+    conn = FakeAuthConnection()
+    monkeypatch.setenv(database_seeder.BOOTSTRAP_PROVIDER_USERNAME_ENV_VAR, "provider")
+    monkeypatch.setenv(database_seeder.BOOTSTRAP_PROVIDER_PASSWORD_ENV_VAR, "provider-password")
+    monkeypatch.setenv(database_seeder.BOOTSTRAP_PROVIDER_DISPLAY_NAME_ENV_VAR, "Local Provider")
+    monkeypatch.delenv(database_seeder.BOOTSTRAP_PROVIDER_ID_ENV_VAR, raising=False)
+
+    status = database_seeder.seed_auth_bootstrap_users(conn)
+
+    assert status["provider"] == "provider_id_missing"
+    assert "provider" not in conn.users_by_username
+
+
+def test_auth_schema_can_be_added_without_resetting_curated_tables() -> None:
+    """Safe startup schema should add auth tables without destructive reset SQL."""
+    schema_sql = database_seeder.read_sql_file(database_seeder.SCHEMA_PATH)
+    reset_sql = database_seeder.read_sql_file(database_seeder.SQL_ROOT / "reset_schema.sql")
+
+    assert "CREATE TABLE IF NOT EXISTS auth_users" in schema_sql
+    assert "CREATE TABLE IF NOT EXISTS auth_access_tokens" in schema_sql
+    assert "DROP TABLE IF EXISTS auth_users" not in reset_sql
+    assert "DROP TABLE IF EXISTS auth_access_tokens" not in reset_sql
