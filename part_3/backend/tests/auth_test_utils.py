@@ -199,6 +199,101 @@ class FakeAuthCursor:
                 self.rowcount = 1
             return
 
+
+        if "from providers" in normalized_sql and "where provider_id" in normalized_sql:
+            self._one = self.conn.provider_names_by_id.get(str(params["provider_id"]))
+            return
+
+        if "insert into provider_application_submissions" in normalized_sql:
+            row = {
+                "id": params["id"],
+                "provider_id": params["provider_id"],
+                "provider_name": params.get("provider_name"),
+                "created_by_user_id": params["created_by_user_id"],
+                "status": params["status"],
+                "target_year": params.get("target_year"),
+                "education_name": params["education_name"],
+                "education_area": params.get("education_area"),
+                "municipality": params.get("municipality"),
+                "region": params.get("region"),
+                "yh_points": params.get("yh_points"),
+                "study_form": params.get("study_form"),
+                "study_pace_percent": params.get("study_pace_percent"),
+                "head_provider_type": params.get("head_provider_type"),
+                "description": params.get("description"),
+                "notes": params.get("notes"),
+                "submitted_at": None,
+                "created_at": utc_now(),
+                "updated_at": utc_now(),
+            }
+            self.conn.provider_submissions_by_id[str(row["id"])] = row
+            self._one = dict(row)
+            self.rowcount = 1
+            return
+
+        if normalized_sql.startswith("select") and "from provider_application_submissions" in normalized_sql and "where id" in normalized_sql:
+            row = self.conn.provider_submissions_by_id.get(str(params["id"]))
+            if row and row["provider_id"] == str(params["provider_id"]):
+                self._one = dict(row)
+            return
+
+        if normalized_sql.startswith("select") and "from provider_application_submissions" in normalized_sql and "order by created_at" in normalized_sql:
+            rows = [
+                dict(row)
+                for row in self.conn.provider_submissions_by_id.values()
+                if row["provider_id"] == str(params["provider_id"])
+            ]
+            if params.get("status") is not None:
+                rows = [row for row in rows if row["status"] == str(params["status"])]
+            if params.get("target_year") is not None:
+                rows = [row for row in rows if row["target_year"] == params["target_year"]]
+            rows.sort(key=lambda row: (row["created_at"], str(row["id"])), reverse=True)
+            offset = int(params.get("offset", 0))
+            limit = int(params.get("limit", len(rows)))
+            self._all = rows[offset : offset + limit]
+            return
+
+        if "update provider_application_submissions" in normalized_sql and "set status = 'submitted'" in normalized_sql:
+            row = self.conn.provider_submissions_by_id.get(str(params["id"]))
+            if row and row["provider_id"] == str(params["provider_id"]) and row["status"] == "draft":
+                row["status"] = "submitted"
+                row["submitted_at"] = utc_now()
+                row["updated_at"] = utc_now()
+                self._one = dict(row)
+                self.rowcount = 1
+            return
+
+        if "update provider_application_submissions" in normalized_sql:
+            row = self.conn.provider_submissions_by_id.get(str(params["id"]))
+            if row and row["provider_id"] == str(params["provider_id"]) and row["status"] == "draft":
+                for field in (
+                    "target_year",
+                    "education_name",
+                    "education_area",
+                    "municipality",
+                    "region",
+                    "yh_points",
+                    "study_form",
+                    "study_pace_percent",
+                    "head_provider_type",
+                    "description",
+                    "notes",
+                ):
+                    if field in params:
+                        row[field] = params[field]
+                row["updated_at"] = utc_now()
+                self._one = dict(row)
+                self.rowcount = 1
+            return
+
+        if "delete from provider_application_submissions" in normalized_sql:
+            row = self.conn.provider_submissions_by_id.get(str(params["id"]))
+            if row and row["provider_id"] == str(params["provider_id"]) and row["status"] == "draft":
+                removed = self.conn.provider_submissions_by_id.pop(str(params["id"]))
+                self._one = {"id": removed["id"]}
+                self.rowcount = 1
+            return
+
         # Seeder SQL and unrelated mocked route SQL are recorded but otherwise ignored.
 
     def executemany(self, sql: str, rows: object) -> None:
@@ -219,6 +314,8 @@ class FakeAuthConnection:
         self.tokens_by_hash: dict[str, dict[str, Any]] = {}
         self.api_keys_by_hash: dict[str, dict[str, Any]] = {}
         self.api_keys_by_id: dict[str, dict[str, Any]] = {}
+        self.provider_submissions_by_id: dict[str, dict[str, Any]] = {}
+        self.provider_names_by_id: dict[str, dict[str, str]] = {}
         self.executed: list[tuple[str, dict[str, Any] | None]] = []
         self.executed_many: list[tuple[str, tuple[object, ...]]] = []
 
@@ -316,6 +413,56 @@ class FakeAuthConnection:
         }
         self.api_keys_by_hash[row["key_hash"]] = row
         self.api_keys_by_id[row["id"]] = row
+        return row
+
+
+    def add_provider_name(self, provider_id: str, provider_name: str) -> dict[str, str]:
+        row = {"utbildningsanordnare": provider_name}
+        self.provider_names_by_id[str(provider_id)] = row
+        return row
+
+    def add_provider_submission(
+        self,
+        *,
+        provider_id: str = "999999",
+        provider_name: str | None = "Local Provider",
+        created_by_user_id: str | None = None,
+        status: str = "draft",
+        target_year: int | None = 2026,
+        education_name: str = "Cloud Data Engineer",
+        education_area: str | None = "Data/IT",
+        municipality: str | None = "Stockholm",
+        region: str | None = "Stockholms län",
+        yh_points: int | None = 400,
+        study_form: str | None = "Distans",
+        study_pace_percent: int | None = 100,
+        head_provider_type: str | None = "Privat",
+        description: str | None = "Provider-created draft application for future review.",
+        notes: str | None = "Initial local validation draft.",
+    ) -> dict[str, Any]:
+        created_at = utc_now()
+        row = {
+            "id": str(uuid4()),
+            "provider_id": provider_id,
+            "provider_name": provider_name,
+            "created_by_user_id": created_by_user_id or str(uuid4()),
+            "status": status,
+            "target_year": target_year,
+            "education_name": education_name,
+            "education_area": education_area,
+            "municipality": municipality,
+            "region": region,
+            "yh_points": yh_points,
+            "study_form": study_form,
+            "study_pace_percent": study_pace_percent,
+            "head_provider_type": head_provider_type,
+            "description": description,
+            "notes": notes,
+            "submitted_at": created_at if status == "submitted" else None,
+            "created_at": created_at,
+            "updated_at": created_at,
+        }
+        self.provider_submissions_by_id[row["id"]] = row
         return row
 
 
