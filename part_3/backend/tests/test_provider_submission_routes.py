@@ -212,7 +212,34 @@ def test_provider_can_submit_draft_and_submitting_again_fails_cleanly() -> None:
     assert submitted.json()["submitted_at"] is not None
     assert submitted_again.status_code == 409
     assert edit_after_submit.status_code == 409
+    assert [event["action"] for event in conn.review_events_by_id.values()] == ["submitted"]
 
+
+
+def test_provider_can_update_and_resubmit_needs_changes_but_cannot_delete() -> None:
+    client, conn = build_client()
+    users = add_users_and_tokens(conn)
+    needs_changes = conn.add_provider_submission(
+        provider_id="999999",
+        created_by_user_id=users["provider"]["id"],
+        status="needs_changes",
+    )
+
+    updated = client.patch(
+        f"/provider/submissions/{needs_changes['id']}",
+        headers=auth_header(),
+        json={"notes": "Clarified requested details.", "study_pace_percent": 75},
+    )
+    delete_response = client.delete(f"/provider/submissions/{needs_changes['id']}", headers=auth_header())
+    resubmitted = client.post(f"/provider/submissions/{needs_changes['id']}/submit", headers=auth_header())
+
+    assert updated.status_code == 200
+    assert updated.json()["status"] == "needs_changes"
+    assert updated.json()["notes"] == "Clarified requested details."
+    assert delete_response.status_code == 409
+    assert resubmitted.status_code == 200
+    assert resubmitted.json()["status"] == "submitted"
+    assert [event["action"] for event in conn.review_events_by_id.values()] == ["resubmitted"]
 
 def test_invalid_payload_and_invalid_uuid_use_standard_error_envelope() -> None:
     client, _ = build_client()

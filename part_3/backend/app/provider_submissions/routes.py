@@ -96,7 +96,7 @@ def patch_submission(
     conn: DatabaseConnection,
     provider: ProviderSubmissionPrincipal,
 ) -> dict:
-    """Update editable fields on one own draft submission."""
+    """Update editable fields on one own draft or needs_changes submission."""
     try:
         submission = update_provider_submission(
             conn,
@@ -135,9 +135,14 @@ def submit_submission(
     conn: DatabaseConnection,
     provider: ProviderSubmissionPrincipal,
 ) -> dict:
-    """Submit one own draft for future admin review."""
+    """Submit or resubmit one own editable submission for admin review."""
     try:
-        submission = submit_provider_submission(conn, provider_id=provider.provider_id, submission_id=str(submission_id))
+        submission = submit_provider_submission(
+            conn,
+            provider_id=provider.provider_id,
+            submission_id=str(submission_id),
+            actor_user_id=str(provider.user_id),
+        )
     except ProviderSubmissionStateError as exc:
         raise _state_conflict(exc) from exc
     if submission is None:
