@@ -17,6 +17,8 @@ class RecordingCursor:
 
     def __init__(self, connection: "RecordingConnection") -> None:
         self.connection = connection
+        self._one: dict[str, object] | None = None
+        self._all: list[dict[str, object]] = []
 
     def __enter__(self) -> "RecordingCursor":
         return self
@@ -26,9 +28,22 @@ class RecordingCursor:
 
     def execute(self, sql: str, params: object | None = None) -> None:
         self.connection.executed.append((sql, params))
+        normalized_sql = " ".join(str(sql).lower().split())
+        self._one = None
+        self._all = []
+        if "select 1 from pg_constraint" in normalized_sql:
+            self._one = {"exists": 1}
+        if "select conname" in normalized_sql and "from pg_constraint" in normalized_sql:
+            self._all = []
 
     def executemany(self, sql: str, rows: object) -> None:
         self.connection.executed_many.append((sql, tuple(rows)))
+
+    def fetchone(self) -> dict[str, object] | None:
+        return self._one
+
+    def fetchall(self) -> list[dict[str, object]]:
+        return self._all
 
 
 class RecordingConnection:
@@ -57,6 +72,7 @@ def test_project_managed_table_list_is_complete() -> None:
         "auth_access_tokens",
         "api_keys",
         "provider_application_submissions",
+        "provider_submission_review_events",
     }
 
 
@@ -128,7 +144,10 @@ def test_ensure_database_ready_runs_schema_indexes_and_seed(monkeypatch: pytest.
     assert "CREATE TABLE IF NOT EXISTS api_keys" in executed_sql
     assert "CREATE INDEX IF NOT EXISTS idx_api_keys_key_hash" in executed_sql
     assert "CREATE TABLE IF NOT EXISTS provider_application_submissions" in executed_sql
+    assert "CREATE TABLE IF NOT EXISTS provider_submission_review_events" in executed_sql
+    assert "ADD COLUMN IF NOT EXISTS review_started_at" in executed_sql
     assert "CREATE INDEX IF NOT EXISTS idx_provider_submissions_provider_id" in executed_sql
+    assert "CREATE INDEX IF NOT EXISTS idx_provider_submission_review_events_submission_id" in executed_sql
     assert conn.executed_many
     assert conn.executed_many[0][1] == database_seeder.CORE_DECISION_ROWS
 
@@ -194,3 +213,4 @@ def test_auth_schema_can_be_added_without_resetting_curated_tables() -> None:
     assert "DROP TABLE IF EXISTS auth_access_tokens" not in reset_sql
     assert "DROP TABLE IF EXISTS api_keys" not in reset_sql
     assert "DROP TABLE IF EXISTS provider_application_submissions" not in reset_sql
+    assert "DROP TABLE IF EXISTS provider_submission_review_events" not in reset_sql

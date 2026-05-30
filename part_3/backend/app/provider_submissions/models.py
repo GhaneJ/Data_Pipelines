@@ -14,10 +14,14 @@ MAX_DESCRIPTION_LENGTH = 4000
 
 
 class ProviderSubmissionStatus(str, Enum):
-    """Statuses owned by the 3.17 provider submission workflow."""
+    """Statuses for provider submission and admin review workflow."""
 
     DRAFT = "draft"
     SUBMITTED = "submitted"
+    UNDER_REVIEW = "under_review"
+    NEEDS_CHANGES = "needs_changes"
+    APPROVED = "approved"
+    REJECTED = "rejected"
 
 
 class ProviderSubmissionIdentity(BaseModel):
@@ -161,6 +165,10 @@ class ProviderSubmissionResponse(BaseModel):
     description: str | None = None
     notes: str | None = None
     submitted_at: datetime | None = None
+    review_started_at: datetime | None = None
+    reviewed_by_user_id: UUID | None = None
+    reviewed_at: datetime | None = None
+    review_notes: str | None = None
     created_at: datetime
     updated_at: datetime
 
