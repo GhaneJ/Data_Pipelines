@@ -223,6 +223,10 @@ class FakeAuthCursor:
                 "description": params.get("description"),
                 "notes": params.get("notes"),
                 "submitted_at": None,
+                "review_started_at": None,
+                "reviewed_by_user_id": None,
+                "reviewed_at": None,
+                "review_notes": None,
                 "created_at": utc_now(),
                 "updated_at": utc_now(),
             }
@@ -231,10 +235,43 @@ class FakeAuthCursor:
             self.rowcount = 1
             return
 
+        if "insert into provider_submission_review_events" in normalized_sql:
+            row = {
+                "id": params["id"],
+                "submission_id": params["submission_id"],
+                "actor_user_id": params.get("actor_user_id"),
+                "actor_role": params["actor_role"],
+                "action": params["action"],
+                "from_status": params.get("from_status"),
+                "to_status": params["to_status"],
+                "notes": params.get("notes"),
+                "created_at": utc_now(),
+            }
+            self.conn.review_events_by_id[str(row["id"])] = row
+            self._one = dict(row)
+            self.rowcount = 1
+            return
+
         if normalized_sql.startswith("select") and "from provider_application_submissions" in normalized_sql and "where id" in normalized_sql:
             row = self.conn.provider_submissions_by_id.get(str(params["id"]))
-            if row and row["provider_id"] == str(params["provider_id"]):
+            if row and ("provider_id" not in params or row["provider_id"] == str(params["provider_id"])):
                 self._one = dict(row)
+            return
+
+        if normalized_sql.startswith("select") and "from provider_application_submissions" in normalized_sql and "order by submitted_at" in normalized_sql:
+            rows = [dict(row) for row in self.conn.provider_submissions_by_id.values()]
+            if params.get("default_statuses") is not None:
+                rows = [row for row in rows if row["status"] in set(params["default_statuses"])]
+            if params.get("status") is not None:
+                rows = [row for row in rows if row["status"] == str(params["status"])]
+            if params.get("provider_id") is not None:
+                rows = [row for row in rows if row["provider_id"] == str(params["provider_id"])]
+            if params.get("target_year") is not None:
+                rows = [row for row in rows if row["target_year"] == params["target_year"]]
+            rows.sort(key=lambda row: (row["submitted_at"] or row["created_at"], row["created_at"], str(row["id"])), reverse=True)
+            offset = int(params.get("offset", 0))
+            limit = int(params.get("limit", len(rows)))
+            self._all = rows[offset : offset + limit]
             return
 
         if normalized_sql.startswith("select") and "from provider_application_submissions" in normalized_sql and "order by created_at" in normalized_sql:
@@ -253,9 +290,33 @@ class FakeAuthCursor:
             self._all = rows[offset : offset + limit]
             return
 
+        if normalized_sql.startswith("select") and "from provider_submission_review_events" in normalized_sql:
+            rows = [
+                dict(row)
+                for row in self.conn.review_events_by_id.values()
+                if str(row["submission_id"]) == str(params["submission_id"])
+            ]
+            rows.sort(key=lambda row: (row["created_at"], str(row["id"])))
+            self._all = rows
+            return
+
+        if "update provider_application_submissions" in normalized_sql and "reviewed_by_user_id" in normalized_sql and "from_status" in params:
+            row = self.conn.provider_submissions_by_id.get(str(params["id"]))
+            if row and row["status"] == str(params["from_status"]):
+                row["status"] = params["to_status"]
+                row["review_started_at"] = row["review_started_at"] or utc_now()
+                row["reviewed_by_user_id"] = params.get("admin_user_id")
+                if "reviewed_at = now()" in normalized_sql:
+                    row["reviewed_at"] = utc_now()
+                row["review_notes"] = params.get("review_notes")
+                row["updated_at"] = utc_now()
+                self._one = dict(row)
+                self.rowcount = 1
+            return
+
         if "update provider_application_submissions" in normalized_sql and "set status = 'submitted'" in normalized_sql:
             row = self.conn.provider_submissions_by_id.get(str(params["id"]))
-            if row and row["provider_id"] == str(params["provider_id"]) and row["status"] == "draft":
+            if row and row["provider_id"] == str(params["provider_id"]) and row["status"] in {"draft", "needs_changes"}:
                 row["status"] = "submitted"
                 row["submitted_at"] = utc_now()
                 row["updated_at"] = utc_now()
@@ -265,7 +326,7 @@ class FakeAuthCursor:
 
         if "update provider_application_submissions" in normalized_sql:
             row = self.conn.provider_submissions_by_id.get(str(params["id"]))
-            if row and row["provider_id"] == str(params["provider_id"]) and row["status"] == "draft":
+            if row and row["provider_id"] == str(params["provider_id"]) and row["status"] in {"draft", "needs_changes"}:
                 for field in (
                     "target_year",
                     "education_name",
@@ -315,6 +376,7 @@ class FakeAuthConnection:
         self.api_keys_by_hash: dict[str, dict[str, Any]] = {}
         self.api_keys_by_id: dict[str, dict[str, Any]] = {}
         self.provider_submissions_by_id: dict[str, dict[str, Any]] = {}
+        self.review_events_by_id: dict[str, dict[str, Any]] = {}
         self.provider_names_by_id: dict[str, dict[str, str]] = {}
         self.executed: list[tuple[str, dict[str, Any] | None]] = []
         self.executed_many: list[tuple[str, tuple[object, ...]]] = []
@@ -458,7 +520,11 @@ class FakeAuthConnection:
             "head_provider_type": head_provider_type,
             "description": description,
             "notes": notes,
-            "submitted_at": created_at if status == "submitted" else None,
+            "submitted_at": created_at if status != "draft" else None,
+            "review_started_at": created_at if status in {"under_review", "needs_changes", "approved", "rejected"} else None,
+            "reviewed_by_user_id": None,
+            "reviewed_at": created_at if status in {"needs_changes", "approved", "rejected"} else None,
+            "review_notes": None,
             "created_at": created_at,
             "updated_at": created_at,
         }
