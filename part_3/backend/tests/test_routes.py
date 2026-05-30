@@ -48,6 +48,8 @@ def test_expected_routes_are_registered() -> None:
         "/auth/whoami",
         "/admin/applications/{diarienummer:path}/notes",
         "/admin/notes/{note_id}",
+        "/admin/api-keys",
+        "/admin/api-keys/{key_id}/revoke",
     }
 
     assert expected_paths.issubset(paths)

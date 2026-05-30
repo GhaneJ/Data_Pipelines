@@ -23,6 +23,19 @@ from backend.app.middleware.request_context import get_request_id
 logger = logging.getLogger(__name__)
 
 
+def _make_json_safe(value):  # type: ignore[no-untyped-def]
+    """Convert validation details into JSON-serializable data."""
+    if isinstance(value, BaseException):
+        return str(value)
+    if isinstance(value, dict):
+        return {key: _make_json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_make_json_safe(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_make_json_safe(item) for item in value)
+    return value
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Register central handlers for expected and unexpected API errors."""
 
@@ -62,7 +75,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             code="validation_error",
             message=VALIDATION_ERROR_MESSAGE,
             detail=VALIDATION_ERROR_MESSAGE,
-            extra_error_fields={"invalid_params": exc.errors()},
+            extra_error_fields={"invalid_params": _make_json_safe(exc.errors())},
         )
 
     @app.exception_handler(psycopg.OperationalError)

@@ -13,6 +13,7 @@ from backend.app.logging_config import configure_logging
 from backend.app.middleware.logging_middleware import RequestLoggingMiddleware
 from backend.app.middleware.request_context import RequestIDMiddleware
 from backend.app.auth import routes as auth_routes
+from backend.app.api_keys import routes as api_key_routes
 from backend.app.routers import admin, applications, export, health, operations, providers, stats
 from backend.app.services.database_seeder import ensure_database_ready
 
@@ -70,8 +71,8 @@ def create_app(*, run_startup_seeder: bool = True) -> FastAPI:
 
     app = FastAPI(
         title="MYH Applications API",
-        version="0.3.15.1",
-        description="Read, operational, protected-admin, and database-authenticated API for the curated MYH applications dataset stored in PostgreSQL.",
+        version="0.3.16",
+        description="Read, export, operational, protected-admin, database-authenticated, and API-key-gated API for the curated MYH applications dataset stored in PostgreSQL.",
         lifespan=build_lifespan(run_startup_seeder),
     )
     register_exception_handlers(app)
@@ -86,6 +87,7 @@ def create_app(*, run_startup_seeder: bool = True) -> FastAPI:
     app.include_router(operations.router)
     app.include_router(auth_routes.router)
     app.include_router(admin.router)
+    app.include_router(api_key_routes.router)
     return app
 
 
