@@ -148,3 +148,31 @@ CREATE TABLE IF NOT EXISTS auth_access_tokens (
     CHECK (btrim(token_hash) <> ''),
     CHECK (expires_at > created_at)
 );
+
+
+-- Database-backed API keys for machine/client access. Raw API keys are
+-- returned once at creation and never stored; only key_hash is persisted.
+-- Scopes use a simple comma-separated TEXT representation to stay explainable
+-- with the project's raw-SQL style.
+CREATE TABLE IF NOT EXISTS api_keys (
+    id UUID PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NULL,
+    key_prefix TEXT NOT NULL,
+    key_hash TEXT NOT NULL UNIQUE,
+    scopes TEXT NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    expires_at TIMESTAMPTZ NULL,
+    revoked_at TIMESTAMPTZ NULL,
+    revoked_by_user_id UUID NULL REFERENCES auth_users(id) ON DELETE SET NULL,
+    created_by_user_id UUID NOT NULL REFERENCES auth_users(id) ON DELETE RESTRICT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_used_at TIMESTAMPTZ NULL,
+    CHECK (btrim(name) <> ''),
+    CHECK (btrim(key_prefix) <> ''),
+    CHECK (btrim(key_hash) <> ''),
+    CHECK (btrim(scopes) <> ''),
+    CHECK (expires_at IS NULL OR expires_at > created_at),
+    CHECK (revoked_at IS NULL OR revoked_at >= created_at)
+);

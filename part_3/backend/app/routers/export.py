@@ -4,20 +4,24 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 
+from backend.app.api_keys.dependencies import require_api_key_scope
+from backend.app.api_keys.models import APIKeyPrincipal, EXPORT_READ_SCOPE
 from backend.app.dependencies import DatabaseConnection
 from backend.app.services.common import ApplicationFilters, resolve_export_source_year
 from backend.app.services.export import fetch_export_applications, rows_to_csv
 
 
 router = APIRouter(tags=["export"])
+ExportAPIKeyPrincipal = Annotated[APIKeyPrincipal, Depends(require_api_key_scope(EXPORT_READ_SCOPE))]
 
 
 @router.get("/export/applications")
 def export_applications_csv(
     conn: DatabaseConnection,
+    api_key_principal: ExportAPIKeyPrincipal,
     year: Annotated[int | None, Query(ge=2020, le=2025, description="User-facing alias for source_year.")] = None,
     source_year: Annotated[int | None, Query(ge=2020, le=2025, description="Source-year alias for export filters.")] = None,
     decision: Annotated[str | None, Query(pattern="^(approved|rejected|withdrawn)$")] = None,
@@ -31,7 +35,7 @@ def export_applications_csv(
     study_form: Annotated[str | None, Query(description="Filter by studieform.")] = None,
     limit: Annotated[int | None, Query(ge=1, le=10000, description="Optional row limit for testing or smaller exports.")] = None,
 ) -> Response:
-    """Export filtered applications as a downloadable CSV file."""
+    """Export filtered applications as CSV using an export-scoped API key."""
     try:
         resolved_source_year = resolve_export_source_year(year=year, source_year=source_year)
     except ValueError as exc:

@@ -6,7 +6,7 @@ Sub-projects 3.2-3.8 built the working backend gradually: PostgreSQL storage, co
 
 Sub-project 3.10 reorganized that backend into a clearer structure and added database readiness checks, simple logging, centralized database-error handling, and focused pytest coverage.
 
-Sub-project 3.11 added a scheduler-ready MYH source-check foundation, local source-status manifest, source-check operation endpoints, refresh metadata, a manual source-check script, and focused tests that do not depend on live internet access. Sub-project 3.12 adds protected admin application notes as a small safe write-side use case. Sub-project 3.12.1 adds safe database seeder/startup initialization with SQL files as the single schema source of truth. Sub-project 3.13 adds minimal local-development CORS support so the React/Vite dashboard can call the public API from the browser. Sub-project 3.14 adds request IDs, safe request logging, and standardized API error envelopes. Sub-project 3.15 adds centralized RBAC foundations. Sub-project 3.15.1 upgrades authentication to PostgreSQL-backed users, hashed passwords, issued opaque bearer tokens, logout/revocation, and database-backed role authorization.
+Sub-project 3.11 added a scheduler-ready MYH source-check foundation, local source-status manifest, source-check operation endpoints, refresh metadata, a manual source-check script, and focused tests that do not depend on live internet access. Sub-project 3.12 adds protected admin application notes as a small safe write-side use case. Sub-project 3.12.1 adds safe database seeder/startup initialization with SQL files as the single schema source of truth. Sub-project 3.13 adds minimal local-development CORS support so the React/Vite dashboard can call the public API from the browser. Sub-project 3.14 adds request IDs, safe request logging, and standardized API error envelopes. Sub-project 3.15 adds centralized RBAC foundations. Sub-project 3.15.1 upgrades authentication to PostgreSQL-backed users, hashed passwords, issued opaque bearer tokens, logout/revocation, and database-backed role authorization. Sub-project 3.16 adds database-backed API keys for machine/client access, admin-only API-key management, scoped `X-API-Key` dependencies, and API-key protection for CSV exports.
 
 ## Technology choices
 
@@ -21,7 +21,8 @@ The backend uses:
 - narrow local-development CORS for the React dashboard,
 - request-id middleware and safe request logging,
 - standardized safe API error responses,
-- database-backed bearer-token authentication and role-based authorization.
+- database-backed bearer-token authentication and role-based authorization,
+- database-backed API keys for scoped machine/client export access.
 
 No ORM is used.
 
@@ -45,6 +46,12 @@ backend/
       routes.py              /auth/login, /auth/whoami, /auth/logout
       token_store.py         retired static-token compatibility guard
       tokens.py              opaque token generation and hashing
+    api_keys/
+      dependencies.py        X-API-Key parsing and scope dependencies
+      key_utils.py           opaque API key generation, hashing, prefixing
+      models.py              API key request/response/principal models
+      repositories.py        API key SQL helpers
+      routes.py              /admin/api-keys management endpoints
     core/
       errors.py              standard API error envelope helpers
     middleware/
@@ -74,6 +81,7 @@ backend/
     reset_schema.sql         explicit full-reload reset, never used by startup
     schema.sql               safe CREATE TABLE IF NOT EXISTS schema source
     indexes.sql              safe CREATE INDEX IF NOT EXISTS indexes
+    upgrade_3_16_api_keys.sql optional manual non-destructive API-key upgrade
   scripts/
     load_curated_data.py
     validate_database.py
@@ -82,6 +90,10 @@ backend/
     check_source_status.py
   tests/
     test_admin_auth.py
+    test_api_key_dependencies.py
+    test_api_key_repositories.py
+    test_api_key_routes.py
+    test_api_key_utils.py
     test_auth_dependencies.py
     test_auth_routes.py
     test_admin_notes_service.py
@@ -90,6 +102,7 @@ backend/
     test_cors.py
     test_database_seeder.py
     test_error_handlers.py
+    test_export_api_key_protection.py
     test_filter_helpers.py
     test_middleware.py
     test_health_service.py
@@ -100,7 +113,7 @@ backend/
     test_source_check_service.py
 ```
 
-`main.py` should stay small. New endpoint work should normally go into a router, with database/query or operation logic placed in a service module. Cross-cutting behavior belongs in `auth/`, `middleware/`, `core/`, `exception_handlers.py`, and `logging_config.py`. The next implementation layer is API key access, not another one-off auth check.
+`main.py` should stay small. New endpoint work should normally go into a router, with database/query or operation logic placed in a service module. Cross-cutting behavior belongs in `auth/`, `middleware/`, `core/`, `exception_handlers.py`, and `logging_config.py`. The next implementation layer is provider application submission CRUD, not another auth rewrite.
 
 ## Install dependencies
 
@@ -138,7 +151,7 @@ The seeder:
 - connects to the existing PostgreSQL database,
 - runs safe `schema.sql` and `indexes.sql`,
 - seeds fixed decision lookup rows with `ON CONFLICT`,
-- includes `application_notes` as a normal project-managed table,
+- includes `application_notes`, `auth_users`, `auth_access_tokens`, and `api_keys` as normal project-managed tables,
 - does not run `reset_schema.sql`,
 - does not reload the curated CSV,
 - does not drop, truncate, delete, or overwrite existing rows.
@@ -159,7 +172,7 @@ From `part_3`:
 python backend/scripts/load_curated_data.py --csv-path ../path/to/myh_curated_applications_2020_2025.csv
 ```
 
-By default, the loader runs `reset_schema.sql`, then the safe `schema.sql`, then `indexes.sql`. This keeps destructive full reload behavior explicit and separate from API startup. The loader reloads lookup rows and application rows from the curated CSV. The API refresh endpoint uses the same loading helper. `application_notes` is not reset by the curated-data reload.
+By default, the loader runs `reset_schema.sql`, then the safe `schema.sql`, then `indexes.sql`. This keeps destructive full reload behavior explicit and separate from API startup. The loader reloads lookup rows and application rows from the curated CSV. The API refresh endpoint uses the same loading helper. `application_notes`, `auth_users`, `auth_access_tokens`, and `api_keys` are not reset by the curated-data reload.
 
 ## Validate the database
 
@@ -400,7 +413,7 @@ Use `/health` for quick “is the API process alive?” checks. Use `/health/db`
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /export/applications` | Returns a downloadable filtered CSV export. |
+| `GET /export/applications` | Returns a downloadable filtered CSV export when `X-API-Key` has `export:read`. |
 
 ## Authentication and role-based authorization
 
@@ -485,7 +498,64 @@ Provider example:
 
 Auth failures use the standardized error envelope from the 3.14 error system. Missing, malformed, invalid, expired, or revoked bearer tokens return 401. Valid credentials with the wrong role return 403. All responses still include `X-Request-ID`; error bodies include the same request ID.
 
-This is a real internal database-backed auth system for the project, not OAuth, SSO, MFA, JWT, or enterprise IAM. API keys are not implemented in 3.15.1 and are planned for 3.16. Provider CRUD, admin review/decision workflow, and authenticated React admin/provider pages are later roadmap steps.
+This is a real internal database-backed auth system for the project, not OAuth, SSO, MFA, JWT, or enterprise IAM. API keys are implemented separately in 3.16 for machine/client access. Provider CRUD, admin review/decision workflow, and authenticated React admin/provider pages are later roadmap steps.
+
+## Database-backed API keys for machine access
+
+Sub-project 3.16 adds API keys as a separate machine/client authentication mechanism. They do **not** replace `/auth/login`, admin/provider bearer sessions, or role-based user authorization. Human users still authenticate with:
+
+```text
+Authorization: Bearer <database-issued-access-token>
+```
+
+Machine clients use:
+
+```text
+X-API-Key: <database-issued-api-key>
+```
+
+API keys are stored in PostgreSQL table `api_keys`. Raw API keys are generated with high entropy, returned only once during creation, and never stored. The database stores only `key_hash`, plus safe metadata such as `name`, `description`, `key_prefix`, `scopes`, `expires_at`, `revoked_at`, `created_by_user_id`, and `last_used_at`. API responses never expose `key_hash`, and list/revoke responses never expose the raw key.
+
+The API key scope model is intentionally simple and explainable. Scopes are stored as comma-separated text; the required scope for CSV export is:
+
+```text
+export:read
+```
+
+Optional future-oriented scope names reserved in code are `stats:read` and `refresh:run`, but 3.16 only protects `GET /export/applications`. Public read/dashboard endpoints remain public:
+
+```text
+GET /health
+GET /health/db
+GET /applications
+GET /applications/{diarienummer}
+GET /providers
+GET /providers/{provider_id}/applications
+GET /stats/...
+```
+
+Admin-only API key management endpoints require a database-issued admin bearer token:
+
+```text
+POST /admin/api-keys
+GET  /admin/api-keys
+POST /admin/api-keys/{key_id}/revoke
+```
+
+Example creation request:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/admin/api-keys" \
+  -H "Authorization: Bearer <admin-access-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Local export client","description":"Local CSV export testing","scopes":["export:read"],"expires_in_days":30}'
+```
+
+The creation response includes `api_key` once. Store it locally; it cannot be retrieved later. Listing API keys returns only safe metadata such as id, name, key prefix, scopes, active/revoked state, expiry, creation time, and last-used time.
+
+API-key failures use the same standardized 3.14 error envelope as the rest of the API. Missing, malformed, invalid, expired, or revoked keys return 401. A valid key without `export:read` returns 403. Success and failure responses keep `X-Request-ID`, and error bodies include the same request id. Logs must not include raw API keys, API key hashes, bearer tokens, or passwords.
+
+This is an internal API-key system for this portfolio project. It is not OAuth, SSO, MFA, JWT, an API gateway, or enterprise IAM.
 
 ## Protected admin application notes
 
@@ -629,10 +699,10 @@ Use `GET /providers` first to find the `provider_id`. Provider paths use numeric
 ### Export filtered applications as CSV
 
 ```bash
-curl -OJ "http://127.0.0.1:8000/export/applications?year=2024&decision=approved"
-curl -OJ "http://127.0.0.1:8000/export/applications?provider=KYH"
-curl -OJ "http://127.0.0.1:8000/export/applications?provider_id=1"
-curl -OJ "http://127.0.0.1:8000/export/applications?year=2025&region=Stockholm&limit=100"
+curl -OJ -H "X-API-Key: <export-api-key>" "http://127.0.0.1:8000/export/applications?year=2024&decision=approved"
+curl -OJ -H "X-API-Key: <export-api-key>" "http://127.0.0.1:8000/export/applications?provider=KYH"
+curl -OJ -H "X-API-Key: <export-api-key>" "http://127.0.0.1:8000/export/applications?provider_id=1"
+curl -OJ -H "X-API-Key: <export-api-key>" "http://127.0.0.1:8000/export/applications?year=2025&region=Stockholm&limit=100"
 ```
 
 The endpoint returns a downloadable file named:
@@ -656,7 +726,7 @@ study_form
 limit
 ```
 
-`year` is the preferred user-facing filter and maps to the database field `source_year`. `source_year` is also accepted as an alias. If both are used, they must have the same value.
+`year` is the preferred user-facing filter and maps to the database field `source_year`. `source_year` is also accepted as an alias. If both are used, they must have the same value. Missing, invalid, expired, or revoked API keys return 401; a valid key without `export:read` returns 403.
 
 ### Operational refresh
 
@@ -690,7 +760,7 @@ Current refresh behavior:
 - reloads lookup tables and applications,
 - includes source-check metadata when a manifest is available,
 - does not download or replace source Excel files,
-- preserves local `application_notes` rows.
+- preserves local `application_notes`, `auth_users`, `auth_access_tokens`, and `api_keys` rows.
 
 Optional guardrail:
 
@@ -716,11 +786,11 @@ python backend/scripts/demo_api.py
 python backend/scripts/demo_api.py --print-only
 ```
 
-The smoke test checks the root endpoint, `/health`, `/health/db`, `/operations/source-status`, refresh, core browsing/statistics/provider/export endpoints, and important guardrails. Admin-note endpoints are shown in the demo helper but are not required by the smoke test unless you choose to test them manually with a database-issued admin bearer token from `/auth/login`.
+The smoke test checks the root endpoint, `/health`, `/health/db`, `/operations/source-status`, refresh, core browsing/statistics/provider/export endpoints, and important guardrails. Admin-note and API-key management endpoints are shown in the demo helper and covered by focused route tests. Runtime API-key flows should be tested manually with a database-issued admin bearer token from `/auth/login`.
 
-## 3.15.1 scope boundary
+## 3.16 scope boundary
 
-Implemented by the end of 3.15.1:
+Implemented by the end of 3.16:
 
 - MYH source-check service,
 - local JSON manifest support,
@@ -743,11 +813,17 @@ Implemented by the end of 3.15.1:
 - request ID handling with `X-Request-ID`,
 - safe request logging middleware,
 - standardized safe error response envelopes,
-- focused middleware and error-handler tests.
+- focused middleware and error-handler tests,
+- database-backed `api_keys` table,
+- hashed API key storage with raw key returned once,
+- admin-only API key create/list/revoke endpoints,
+- `X-API-Key` machine authentication separate from bearer user sessions,
+- `export:read` scope requirement on `GET /export/applications`,
+- public read/statistics/provider endpoints preserved without API keys,
+- API-key utility, repository, dependency, route, export-protection, and regression tests.
 
-Still not implemented after 3.15.1:
+Still not implemented after 3.16:
 
-- API key management,
 - provider-submitted application CRUD,
 - admin review/decision workflow,
 - authenticated React admin/provider workspace,

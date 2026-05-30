@@ -4,7 +4,7 @@
 
 Part 3 turns the curated Part 2 MYH applications dataset into a small internal data service.
 
-The project shows the path from a trusted curated dataset to PostgreSQL storage, a FastAPI API, protected admin metadata operations, a React + TypeScript dashboard that consumes the public API, a cross-cutting middleware/error foundation, and now database-backed authentication with issued bearer tokens and role-based authorization. The remaining roadmap adds API keys, provider/admin workflows, operational hardening, and a small explainable ML layer in staged steps. The implementation stays practical and explainable while using normal professional structure where it solves real project problems.
+The project shows the path from a trusted curated dataset to PostgreSQL storage, a FastAPI API, protected admin metadata operations, a React + TypeScript dashboard that consumes the public API, a cross-cutting middleware/error foundation, and now database-backed authentication with issued bearer tokens, role-based authorization, and a separate database-backed API key system for machine export access. The remaining roadmap adds provider/admin workflows, operational hardening, and a small explainable ML layer in staged steps. The implementation stays practical and explainable while using normal professional structure where it solves real project problems.
 
 ## Source of truth
 
@@ -25,13 +25,13 @@ Main grain: one application record per diarienummer
 
 Sub-project 3.11 added a controlled MYH source-check foundation. It can inspect the configured official MYH result page, record a local source-status manifest, and help decide whether the local curated CSV may be stale. It does **not** automatically download new Excel files or overwrite the curated dataset.
 
-Sub-project 3.12 added a protected admin write use case: local application notes stored in a separate metadata table. Admin notes do **not** modify the curated MYH source data. Sub-project 3.15 added the central RBAC shape, and Sub-project 3.15.1 upgrades that boundary to database-backed users, hashed passwords, issued opaque bearer access tokens, token expiry, logout/revocation, and database-backed role authorization.
+Sub-project 3.12 added a protected admin write use case: local application notes stored in a separate metadata table. Admin notes do **not** modify the curated MYH source data. Sub-project 3.15 added the central RBAC shape, and Sub-project 3.15.1 upgrades that boundary to database-backed users, hashed passwords, issued opaque bearer access tokens, token expiry, logout/revocation, and database-backed role authorization. Sub-project 3.16 adds database-backed API keys for machine/client access to protected exports.
 
 Sub-project 3.12.1 adds safe database seeder/startup initialization. The PostgreSQL database itself must already exist, and `DATABASE_URL` must point to it. When the FastAPI app starts, the backend safely checks/creates all project-managed tables and indexes through code. Startup does not reload, truncate, delete, or overwrite curated application data or admin notes.
 
 Sub-project 3.13 adds a React + TypeScript dashboard under `frontend/`. It consumes public backend endpoints for health, database readiness, statistics, trends, filtered application browsing, and application detail. Protected admin-note endpoints are intentionally not exposed in the public dashboard.
 
-Sub-project 3.14 adds request IDs, safe request logging, and standardized error envelopes. Sub-project 3.15 added centralized RBAC foundations. Sub-project 3.15.1 replaces the transitional environment-token identity source with PostgreSQL auth users, salted PBKDF2 password hashes, database-issued opaque bearer access tokens, hashed token storage, expiry, logout/revocation, `/auth/login`, database-backed `/auth/whoami`, and admin/provider role checks. It does not implement API keys, provider CRUD, admin review workflow, authenticated frontend workspace, OAuth/SSO/MFA, or ML.
+Sub-project 3.14 adds request IDs, safe request logging, and standardized error envelopes. Sub-project 3.15 added centralized RBAC foundations. Sub-project 3.15.1 replaces the transitional environment-token identity source with PostgreSQL auth users, salted PBKDF2 password hashes, database-issued opaque bearer access tokens, hashed token storage, expiry, logout/revocation, `/auth/login`, database-backed `/auth/whoami`, and admin/provider role checks. It does not implement provider CRUD, admin review workflow, authenticated frontend workspace, OAuth/SSO/MFA, or ML. API keys are implemented separately in 3.16 and do not replace user login sessions.
 
 ## Implementation principles
 
@@ -44,11 +44,11 @@ Sub-project 3.14 adds request IDs, safe request logging, and standardized error 
 - Add structure only when it improves maintainability, validation, operations, or later roadmap work.
 - Keep generated runtime files and internal handoff/control files outside Git tracking.
 
-## Current project shape after Sub-project 3.15.1
+## Current project shape after Sub-project 3.16
 
 Sub-project 3.10 reorganized the backend into routers and services, added database readiness checks, logging, centralized database-error handling, and focused pytest coverage.
 
-Sub-project 3.11 added a modest scheduled-source-check foundation and refresh metadata upgrade. Sub-project 3.12 added protected admin notes as a safe write-side use case. Sub-project 3.12.1 added safe startup schema initialization with a single SQL schema source of truth. Sub-project 3.13 added the React + TypeScript visualization dashboard and minimal local-development CORS support for the Vite dev server. Sub-project 3.14 added request-context middleware, request logging middleware, and centralized safe error responses. Sub-project 3.15.1 adds database-backed login sessions and role-based authorization for admin and provider principals.
+Sub-project 3.11 added a modest scheduled-source-check foundation and refresh metadata upgrade. Sub-project 3.12 added protected admin notes as a safe write-side use case. Sub-project 3.12.1 added safe startup schema initialization with a single SQL schema source of truth. Sub-project 3.13 added the React + TypeScript visualization dashboard and minimal local-development CORS support for the Vite dev server. Sub-project 3.14 added request-context middleware, request logging middleware, and centralized safe error responses. Sub-project 3.15.1 adds database-backed login sessions and role-based authorization for admin and provider principals. Sub-project 3.16 adds database-backed API keys for machine access, scoped `X-API-Key` dependencies, admin-only key management, and API-key protection for CSV exports.
 
 ```text
 part_3/
@@ -99,6 +99,13 @@ part_3/
         routes.py                # /auth/login, /auth/whoami, /auth/logout
         token_store.py           # retired static-token compatibility guard
         tokens.py                # opaque token generation and hashing
+      api_keys/
+        __init__.py
+        dependencies.py          # X-API-Key parsing and scope dependencies
+        key_utils.py             # opaque API key generation, hashing, prefixing
+        models.py                # API key request/response/principal models
+        repositories.py          # API key SQL helpers
+        routes.py                # /admin/api-keys management endpoints
       core/
         errors.py                # standard API error envelope helpers
       middleware/
@@ -136,8 +143,13 @@ part_3/
       reset_schema.sql             # explicit full-reload reset, never used by startup
       schema.sql                   # safe CREATE TABLE IF NOT EXISTS schema source
       indexes.sql                  # safe CREATE INDEX IF NOT EXISTS indexes
+      upgrade_3_16_api_keys.sql    # optional manual non-destructive API-key upgrade
     tests/
       test_admin_auth.py
+      test_api_key_dependencies.py
+      test_api_key_repositories.py
+      test_api_key_routes.py
+      test_api_key_utils.py
       test_auth_dependencies.py
       test_auth_routes.py
       test_admin_notes_service.py
@@ -145,6 +157,7 @@ part_3/
       test_check_source_status_script.py
       test_database_seeder.py
       test_error_handlers.py
+      test_export_api_key_protection.py
       test_filter_helpers.py
       test_middleware.py
       test_health_service.py
@@ -173,13 +186,16 @@ principal_types
 study_forms
 ```
 
-Local admin metadata table:
+Local admin/auth/API-key tables:
 
 ```text
 application_notes
+auth_users
+auth_access_tokens
+api_keys
 ```
 
-The `applications` table remains the central curated-data table. Repeated high-value fields such as provider, education area, location, decision, principal type, and study form are represented through lookup tables. The `application_notes` table is separate local metadata for protected admin use and does not overwrite source data.
+The `applications` table remains the central curated-data table. Repeated high-value fields such as provider, education area, location, decision, principal type, and study form are represented through lookup tables. `application_notes`, `auth_users`, `auth_access_tokens`, and `api_keys` are separate local system tables and do not overwrite source data.
 
 Database initialization has a strict separation of responsibilities:
 
@@ -189,7 +205,7 @@ backend/sql/indexes.sql       safe index definitions, used by startup and loader
 backend/sql/reset_schema.sql  explicit curated-data reset, used only by loader/refresh
 ```
 
-The FastAPI startup seeder runs the safe schema and index files and seeds the fixed decision lookup values with `ON CONFLICT`. It never runs `reset_schema.sql` and never reloads the curated CSV. The loader/refresh workflow uses `reset_schema.sql` explicitly before reloading curated lookup rows and application rows from CSV. `application_notes` is preserved across curated-data reloads.
+The FastAPI startup seeder runs the safe schema and index files and seeds the fixed decision lookup values with `ON CONFLICT`. It never runs `reset_schema.sql` and never reloads the curated CSV. The loader/refresh workflow uses `reset_schema.sql` explicitly before reloading curated lookup rows and application rows from CSV. `application_notes`, `auth_users`, `auth_access_tokens`, and `api_keys` are preserved across curated-data reloads.
 
 
 Traceability fields from the curated dataset are preserved:
@@ -213,7 +229,7 @@ The API reads from PostgreSQL and provides:
 - filtered and paginated browsing,
 - grouped statistics,
 - provider browsing,
-- filtered CSV export,
+- filtered CSV export protected by scoped API keys,
 - trend statistics over `source_year`,
 - one controlled operational refresh endpoint.
 
@@ -242,6 +258,9 @@ GET  /stats/trends/by-education-area
 GET  /providers
 GET  /providers/{provider_id}/applications
 GET  /export/applications
+POST /admin/api-keys
+GET  /admin/api-keys
+POST /admin/api-keys/{key_id}/revoke
 POST /refresh
 ```
 
@@ -282,7 +301,7 @@ Standard API errors now use this envelope:
 
 The top-level `detail` field is kept for compatibility with existing FastAPI/browser helpers, while new code should use the `error` object. The handlers preserve important status codes such as 400, 401, 403, 404, 422, 500, and 503, and avoid exposing stack traces or internal database exception details.
 
-3.15 uses this foundation for token authentication and RBAC. API keys are still not implemented; they are planned for 3.16.
+3.15 uses this foundation for token authentication and RBAC. 3.16 reuses it for scoped API-key failures and protected CSV export access.
 
 ## React + TypeScript dashboard
 
@@ -502,7 +521,64 @@ Provider example:
 
 `POST /auth/logout` revokes the current token. A logged-out, expired, missing, malformed, or unknown token returns a standardized 401 error envelope. A valid provider token on an admin-only route returns a standardized 403 error envelope. Auth success and failure responses include `X-Request-ID`, and the same request ID appears inside the `error` object on failures.
 
-This is a real internal database-backed auth system for the project. It is intentionally not OAuth, SSO, MFA, JWT, or enterprise IAM. API keys are not part of 3.15.1 and are planned for 3.16. Provider CRUD, admin review workflow, and authenticated React admin/provider workspaces are also later roadmap steps.
+This is a real internal database-backed auth system for the project. It is intentionally not OAuth, SSO, MFA, JWT, or enterprise IAM. API keys are now implemented as a separate machine/client access system in 3.16. Provider CRUD, admin review workflow, and authenticated React admin/provider workspaces are also later roadmap steps.
+
+## Database-backed API keys for machine access
+
+Sub-project 3.16 adds API keys as a separate machine/client authentication mechanism. They do **not** replace `/auth/login`, admin/provider bearer sessions, or role-based user authorization. Human users still authenticate with:
+
+```text
+Authorization: Bearer <database-issued-access-token>
+```
+
+Machine clients use:
+
+```text
+X-API-Key: <database-issued-api-key>
+```
+
+API keys are stored in PostgreSQL table `api_keys`. Raw API keys are generated with high entropy, returned only once during creation, and never stored. The database stores only `key_hash`, plus safe metadata such as `name`, `description`, `key_prefix`, `scopes`, `expires_at`, `revoked_at`, `created_by_user_id`, and `last_used_at`. API responses never expose `key_hash`, and list/revoke responses never expose the raw key.
+
+The API key scope model is intentionally simple and explainable. Scopes are stored as comma-separated text; the required scope for CSV export is:
+
+```text
+export:read
+```
+
+Optional future-oriented scope names reserved in code are `stats:read` and `refresh:run`, but 3.16 only protects `GET /export/applications`. Public read/dashboard endpoints remain public:
+
+```text
+GET /health
+GET /health/db
+GET /applications
+GET /applications/{diarienummer}
+GET /providers
+GET /providers/{provider_id}/applications
+GET /stats/...
+```
+
+Admin-only API key management endpoints require a database-issued admin bearer token:
+
+```text
+POST /admin/api-keys
+GET  /admin/api-keys
+POST /admin/api-keys/{key_id}/revoke
+```
+
+Example creation request:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/admin/api-keys" \
+  -H "Authorization: Bearer <admin-access-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Local export client","description":"Local CSV export testing","scopes":["export:read"],"expires_in_days":30}'
+```
+
+The creation response includes `api_key` once. Store it locally; it cannot be retrieved later. Listing API keys returns only safe metadata such as id, name, key prefix, scopes, active/revoked state, expiry, creation time, and last-used time.
+
+API-key failures use the same standardized 3.14 error envelope as the rest of the API. Missing, malformed, invalid, expired, or revoked keys return 401. A valid key without `export:read` returns 403. Success and failure responses keep `X-Request-ID`, and error bodies include the same request id. Logs must not include raw API keys, API key hashes, bearer tokens, or passwords.
+
+This is an internal API-key system for this portfolio project. It is not OAuth, SSO, MFA, JWT, an API gateway, or enterprise IAM.
 
 ## Protected admin application notes
 
@@ -579,7 +655,7 @@ offset
 
 `GET /providers` supports `q`, `limit`, and `offset`. Provider detail paths use numeric `provider_id` values because provider names can contain spaces, punctuation, Swedish characters, and organization suffixes.
 
-`GET /export/applications` supports filtered CSV downloads with assignment-style examples:
+`GET /export/applications` supports filtered CSV downloads with assignment-style examples. Since 3.16, it requires `X-API-Key` with `export:read`:
 
 ```text
 GET /export/applications?year=2024&decision=approved
@@ -591,7 +667,7 @@ Trend endpoints support `year_from` and `year_to`. Decision trends can be filter
 
 ## Operational refresh
 
-`POST /refresh` still reloads PostgreSQL from the existing curated CSV. It validates required columns and expected dataset assumptions, runs the explicit curated-data reset, recreates the safe schema, reloads lookup tables and applications, and returns a JSON summary. Local `application_notes` rows are preserved.
+`POST /refresh` still reloads PostgreSQL from the existing curated CSV. It validates required columns and expected dataset assumptions, runs the explicit curated-data reset, recreates the safe schema, reloads lookup tables and applications, and returns a JSON summary. Local `application_notes`, `auth_users`, `auth_access_tokens`, and `api_keys` rows are preserved.
 
 3.11 adds source-check metadata to the refresh response when a source-status manifest is available. The endpoint remains safe: it does not download new MYH files or overwrite the curated CSV.
 
@@ -710,7 +786,7 @@ To include the operational refresh call in the demo sequence:
 python backend/scripts/demo_api.py --include-refresh
 ```
 
-## Expanded roadmap after 3.15
+## Expanded roadmap after 3.16
 
 The assignment remains the baseline for required deliverables, but the assessor has allowed stronger additions when they remain explainable at vocational/YH-student level and improve the final project/demo value.
 
@@ -724,7 +800,7 @@ Current roadmap:
 3.13 React + TypeScript Visualization and Trend Dashboard — completed
 3.14 Cross-cutting API Middleware Foundation — completed
 3.15 Portfolio-Grade Token Authentication and Role-Based Authorization — completed as RBAC foundation
-3.16 API Key Access System — next
+3.16 Database-Backed API Key Access System — completed
 3.17 Provider Application Submission CRUD API
 3.18 Admin Review and Decision Workflow API
 3.19 Authenticated React Admin and Provider Workspace
@@ -739,7 +815,7 @@ Guiding rule:
 Vocational level means explainable and proportionate, not toy-like or artificially weak. Use normal professional structure when it improves correctness, maintainability, robustness, operations, or presentation value.
 ```
 
-The React dashboard is implemented and consumes public read/statistics endpoints. Central token authentication and role-based authorization are now in place for backend routes. API keys, provider CRUD, admin review workflows, authenticated React workspaces, and ML are still not implemented yet; they are planned for later sub-projects.
+The React dashboard is implemented and consumes public read/statistics endpoints. Central token authentication, role-based authorization, and database-backed API keys are now in place for backend routes. Provider CRUD, admin review workflows, authenticated React workspaces, and ML are still planned for later sub-projects.
 
 ## Git policy
 

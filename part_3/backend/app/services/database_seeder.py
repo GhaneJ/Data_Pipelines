@@ -40,6 +40,7 @@ PROJECT_MANAGED_TABLES = (
     "application_notes",
     "auth_users",
     "auth_access_tokens",
+    "api_keys",
 )
 
 PROJECT_MANAGED_INDEXES = (
@@ -63,6 +64,11 @@ PROJECT_MANAGED_INDEXES = (
     "idx_auth_access_tokens_token_hash",
     "idx_auth_access_tokens_user_id",
     "idx_auth_access_tokens_expires_at",
+    "idx_api_keys_key_hash",
+    "idx_api_keys_key_prefix",
+    "idx_api_keys_is_active",
+    "idx_api_keys_expires_at",
+    "idx_api_keys_created_by_user_id",
 )
 
 CORE_DECISION_ROWS = (
