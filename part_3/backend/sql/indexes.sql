@@ -61,3 +61,19 @@ CREATE INDEX IF NOT EXISTS idx_auth_access_tokens_user_id
 
 CREATE INDEX IF NOT EXISTS idx_auth_access_tokens_expires_at
     ON auth_access_tokens (expires_at);
+
+
+CREATE INDEX IF NOT EXISTS idx_api_keys_key_hash
+    ON api_keys (key_hash);
+
+CREATE INDEX IF NOT EXISTS idx_api_keys_key_prefix
+    ON api_keys (key_prefix);
+
+CREATE INDEX IF NOT EXISTS idx_api_keys_is_active
+    ON api_keys (is_active);
+
+CREATE INDEX IF NOT EXISTS idx_api_keys_expires_at
+    ON api_keys (expires_at);
+
+CREATE INDEX IF NOT EXISTS idx_api_keys_created_by_user_id
+    ON api_keys (created_by_user_id);

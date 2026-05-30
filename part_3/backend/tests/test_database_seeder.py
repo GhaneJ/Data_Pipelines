@@ -55,6 +55,7 @@ def test_project_managed_table_list_is_complete() -> None:
         "application_notes",
         "auth_users",
         "auth_access_tokens",
+        "api_keys",
     }
 
 
@@ -123,6 +124,8 @@ def test_ensure_database_ready_runs_schema_indexes_and_seed(monkeypatch: pytest.
     assert "CREATE TABLE IF NOT EXISTS applications" in executed_sql
     assert "CREATE TABLE IF NOT EXISTS application_notes" in executed_sql
     assert "CREATE INDEX IF NOT EXISTS idx_application_notes_diarienummer" in executed_sql
+    assert "CREATE TABLE IF NOT EXISTS api_keys" in executed_sql
+    assert "CREATE INDEX IF NOT EXISTS idx_api_keys_key_hash" in executed_sql
     assert conn.executed_many
     assert conn.executed_many[0][1] == database_seeder.CORE_DECISION_ROWS
 
@@ -186,3 +189,4 @@ def test_auth_schema_can_be_added_without_resetting_curated_tables() -> None:
     assert "CREATE TABLE IF NOT EXISTS auth_access_tokens" in schema_sql
     assert "DROP TABLE IF EXISTS auth_users" not in reset_sql
     assert "DROP TABLE IF EXISTS auth_access_tokens" not in reset_sql
+    assert "DROP TABLE IF EXISTS api_keys" not in reset_sql
