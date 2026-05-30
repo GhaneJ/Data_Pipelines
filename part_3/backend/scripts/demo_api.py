@@ -157,6 +157,41 @@ def main() -> None:
             call_by_default=False,
         ),
         DemoStep(
+            "Provider login",
+            "POST",
+            "/auth/login",
+            "Creates a database-issued provider bearer session for provider submission CRUD; not called by default.",
+            call_by_default=False,
+        ),
+        DemoStep(
+            "Provider submission create",
+            "POST",
+            "/provider/submissions",
+            "Creates a provider-owned draft application submission using Authorization: Bearer <provider-token>; not called by default.",
+            call_by_default=False,
+        ),
+        DemoStep(
+            "Provider submission list",
+            "GET",
+            "/provider/submissions",
+            "Lists only the authenticated provider's own submissions; not called by default.",
+            call_by_default=False,
+        ),
+        DemoStep(
+            "Provider submission update",
+            "PATCH",
+            "/provider/submissions/{submission_id}",
+            "Updates editable fields only while the submission is still draft; not called by default.",
+            call_by_default=False,
+        ),
+        DemoStep(
+            "Provider submission submit",
+            "POST",
+            "/provider/submissions/{submission_id}/submit",
+            "Moves a draft submission to submitted for future admin review; not called by default.",
+            call_by_default=False,
+        ),
+        DemoStep(
             "Filtered application browsing",
             "GET",
             "/applications?" + urlencode({"source_year": 2024, "decision": "approved", "limit": 3}),
@@ -221,6 +256,8 @@ def main() -> None:
                 extra = "not called by default; run from /docs or use the check_source_status.py script"
             elif step.title in {"Protected admin notes", "Protected admin note list", "Protected admin note patch", "Admin API key creation", "Admin API key list", "Admin API key revoke"}:
                 extra = "not called by default; log in through /auth/login and send Authorization: Bearer <admin-token> from /docs or curl"
+            elif step.title.startswith("Provider submission") or step.title == "Provider login":
+                extra = "not called by default; log in through /auth/login and send Authorization: Bearer <provider-token> from /docs or curl"
             elif step.title == "Filtered CSV export" and not args.api_key:
                 extra = "requires a database-issued X-API-Key with export:read; pass --api-key to call it"
             elif step.title == "Operational refresh" and not args.include_refresh:

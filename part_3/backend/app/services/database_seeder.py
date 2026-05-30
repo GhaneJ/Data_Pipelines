@@ -41,6 +41,7 @@ PROJECT_MANAGED_TABLES = (
     "auth_users",
     "auth_access_tokens",
     "api_keys",
+    "provider_application_submissions",
 )
 
 PROJECT_MANAGED_INDEXES = (
@@ -69,6 +70,11 @@ PROJECT_MANAGED_INDEXES = (
     "idx_api_keys_is_active",
     "idx_api_keys_expires_at",
     "idx_api_keys_created_by_user_id",
+    "idx_provider_submissions_provider_id",
+    "idx_provider_submissions_created_by_user_id",
+    "idx_provider_submissions_status",
+    "idx_provider_submissions_target_year",
+    "idx_provider_submissions_created_at",
 )
 
 CORE_DECISION_ROWS = (

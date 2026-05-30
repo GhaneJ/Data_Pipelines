@@ -25,6 +25,8 @@ def error_code_for_status(status_code: int) -> str:
         return "forbidden"
     if status_code == status.HTTP_404_NOT_FOUND:
         return "not_found"
+    if status_code == status.HTTP_409_CONFLICT:
+        return "conflict"
     if status_code == 422:
         return "validation_error"
     if status_code == status.HTTP_503_SERVICE_UNAVAILABLE:

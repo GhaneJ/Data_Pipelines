@@ -77,3 +77,19 @@ CREATE INDEX IF NOT EXISTS idx_api_keys_expires_at
 
 CREATE INDEX IF NOT EXISTS idx_api_keys_created_by_user_id
     ON api_keys (created_by_user_id);
+
+CREATE INDEX IF NOT EXISTS idx_provider_submissions_provider_id
+    ON provider_application_submissions (provider_id);
+
+CREATE INDEX IF NOT EXISTS idx_provider_submissions_created_by_user_id
+    ON provider_application_submissions (created_by_user_id);
+
+CREATE INDEX IF NOT EXISTS idx_provider_submissions_status
+    ON provider_application_submissions (status);
+
+CREATE INDEX IF NOT EXISTS idx_provider_submissions_target_year
+    ON provider_application_submissions (target_year);
+
+CREATE INDEX IF NOT EXISTS idx_provider_submissions_created_at
+    ON provider_application_submissions (created_at DESC);
+
