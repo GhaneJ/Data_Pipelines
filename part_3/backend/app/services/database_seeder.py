@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import psycopg
+from psycopg import sql
 
 from backend.app.auth.models import Role
 from backend.app.auth.password_hashing import hash_password
@@ -42,6 +43,7 @@ PROJECT_MANAGED_TABLES = (
     "auth_access_tokens",
     "api_keys",
     "provider_application_submissions",
+    "provider_submission_review_events",
 )
 
 PROJECT_MANAGED_INDEXES = (
@@ -75,6 +77,14 @@ PROJECT_MANAGED_INDEXES = (
     "idx_provider_submissions_status",
     "idx_provider_submissions_target_year",
     "idx_provider_submissions_created_at",
+    "idx_provider_submissions_reviewed_by_user_id",
+    "idx_provider_submissions_review_started_at",
+    "idx_provider_submissions_reviewed_at",
+    "idx_provider_submissions_provider_status",
+    "idx_provider_submission_review_events_submission_id",
+    "idx_provider_submission_review_events_actor_user_id",
+    "idx_provider_submission_review_events_action",
+    "idx_provider_submission_review_events_created_at",
 )
 
 CORE_DECISION_ROWS = (
@@ -136,6 +146,119 @@ def seed_core_lookup_rows(conn: psycopg.Connection[dict[str, Any]]) -> None:
     """Seed tiny fixed lookup rows that do not depend on the curated CSV."""
     with conn.cursor() as cursor:
         cursor.executemany(SEED_CORE_DECISIONS_SQL, CORE_DECISION_ROWS)
+
+
+def _constraint_exists(
+    conn: psycopg.Connection[dict[str, Any]],
+    *,
+    table_name: str,
+    constraint_name: str,
+) -> bool:
+    """Return whether a named project-managed constraint exists."""
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT 1
+            FROM pg_constraint
+            WHERE conrelid = %(table_name)s::regclass
+              AND conname = %(constraint_name)s;
+            """,
+            {"table_name": table_name, "constraint_name": constraint_name},
+        )
+        return cursor.fetchone() is not None
+
+
+def _drop_provider_submission_status_constraints(conn: psycopg.Connection[dict[str, Any]]) -> None:
+    """Drop old 3.17 status checks before installing the 3.18 checks.
+
+    This is code-managed schema upgrade logic, not a user-run manual ALTER. It
+    only touches check constraints that reference provider-submission workflow
+    status. Existing rows and curated data are preserved.
+    """
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT conname, pg_get_constraintdef(oid) AS definition
+            FROM pg_constraint
+            WHERE conrelid = 'provider_application_submissions'::regclass
+              AND contype = 'c';
+            """
+        )
+        constraints = cursor.fetchall()
+
+    for constraint in constraints:
+        definition = str(constraint["definition"]).lower()
+        if "status" not in definition:
+            continue
+        with conn.cursor() as cursor:
+            cursor.execute(
+                sql.SQL("ALTER TABLE provider_application_submissions DROP CONSTRAINT {}").format(
+                    sql.Identifier(str(constraint["conname"]))
+                )
+            )
+
+
+def ensure_provider_submission_review_schema(conn: psycopg.Connection[dict[str, Any]]) -> None:
+    """Upgrade existing 3.17 provider-submission databases for 3.18.
+
+    ``CREATE TABLE IF NOT EXISTS`` cannot update existing check constraints or
+    add missing review metadata columns to already-created tables. This function
+    performs the non-destructive, application-code-managed upgrade required for
+    local databases that already contain 3.17 provider submissions.
+    """
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            ALTER TABLE provider_application_submissions
+                ADD COLUMN IF NOT EXISTS review_started_at TIMESTAMPTZ NULL,
+                ADD COLUMN IF NOT EXISTS reviewed_by_user_id UUID NULL,
+                ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ NULL,
+                ADD COLUMN IF NOT EXISTS review_notes TEXT NULL;
+            """
+        )
+
+    if not _constraint_exists(
+        conn,
+        table_name="provider_application_submissions",
+        constraint_name="provider_submission_reviewed_by_user_id_fkey",
+    ):
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                ALTER TABLE provider_application_submissions
+                ADD CONSTRAINT provider_submission_reviewed_by_user_id_fkey
+                FOREIGN KEY (reviewed_by_user_id) REFERENCES auth_users(id) ON DELETE SET NULL;
+                """
+            )
+
+    if not (
+        _constraint_exists(
+            conn,
+            table_name="provider_application_submissions",
+            constraint_name="provider_submission_status_check",
+        )
+        and _constraint_exists(
+            conn,
+            table_name="provider_application_submissions",
+            constraint_name="provider_submission_submitted_at_status_check",
+        )
+    ):
+        _drop_provider_submission_status_constraints(conn)
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                ALTER TABLE provider_application_submissions
+                ADD CONSTRAINT provider_submission_status_check
+                CHECK (status IN ('draft', 'submitted', 'under_review', 'needs_changes', 'approved', 'rejected'));
+                """
+            )
+            cursor.execute(
+                """
+                ALTER TABLE provider_application_submissions
+                ADD CONSTRAINT provider_submission_submitted_at_status_check
+                CHECK ((status = 'draft' AND submitted_at IS NULL) OR (status <> 'draft' AND submitted_at IS NOT NULL));
+                """
+            )
 
 
 def _read_env(name: str) -> str | None:
@@ -232,6 +355,7 @@ def ensure_database_ready(
     """
     with open_connection(database_url) as conn:
         run_safe_sql_file(conn, schema_path)
+        ensure_provider_submission_review_schema(conn)
         run_safe_sql_file(conn, indexes_path)
         seed_core_lookup_rows(conn)
         seed_auth_bootstrap_users(conn)

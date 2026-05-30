@@ -50,6 +50,13 @@ def test_expected_routes_are_registered() -> None:
         "/admin/notes/{note_id}",
         "/admin/api-keys",
         "/admin/api-keys/{key_id}/revoke",
+        "/admin/provider-submissions",
+        "/admin/provider-submissions/{submission_id}",
+        "/admin/provider-submissions/{submission_id}/events",
+        "/admin/provider-submissions/{submission_id}/start-review",
+        "/admin/provider-submissions/{submission_id}/request-changes",
+        "/admin/provider-submissions/{submission_id}/approve",
+        "/admin/provider-submissions/{submission_id}/reject",
     }
 
     assert expected_paths.issubset(paths)

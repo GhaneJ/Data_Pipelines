@@ -45,6 +45,8 @@ def test_openapi_keeps_public_export_admin_and_provider_boundaries_registered() 
     assert "/admin/api-keys" in paths
     assert "/provider/submissions" in paths
     assert "/provider/submissions/{submission_id}/submit" in paths
+    assert "/admin/provider-submissions" in paths
+    assert "/admin/provider-submissions/{submission_id}/approve" in paths
 
 
 def test_x_admin_token_and_api_key_do_not_grant_provider_submission_access() -> None:

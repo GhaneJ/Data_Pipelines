@@ -179,7 +179,8 @@ CREATE TABLE IF NOT EXISTS api_keys (
 
 -- Provider-created application submissions are a separate write-side workflow
 -- table. They do not mutate or replace the historical curated applications
--- table. Submitted records are reserved for the future admin review workflow.
+-- table. Admin approval is a workflow decision only and does not insert rows
+-- into the historical curated applications table.
 CREATE TABLE IF NOT EXISTS provider_application_submissions (
     id UUID PRIMARY KEY,
     provider_id TEXT NOT NULL,
@@ -198,15 +199,41 @@ CREATE TABLE IF NOT EXISTS provider_application_submissions (
     description TEXT NULL,
     notes TEXT NULL,
     submitted_at TIMESTAMPTZ NULL,
+    review_started_at TIMESTAMPTZ NULL,
+    reviewed_by_user_id UUID NULL,
+    reviewed_at TIMESTAMPTZ NULL,
+    review_notes TEXT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT provider_submission_reviewed_by_user_id_fkey
+        FOREIGN KEY (reviewed_by_user_id) REFERENCES auth_users(id) ON DELETE SET NULL,
     CHECK (btrim(provider_id) <> ''),
-    CHECK (status IN ('draft', 'submitted')),
+    CONSTRAINT provider_submission_status_check
+        CHECK (status IN ('draft', 'submitted', 'under_review', 'needs_changes', 'approved', 'rejected')),
     CHECK (target_year IS NULL OR target_year BETWEEN 2020 AND 2100),
     CHECK (btrim(education_name) <> ''),
     CHECK (yh_points IS NULL OR yh_points > 0),
     CHECK (study_pace_percent IS NULL OR (study_pace_percent >= 1 AND study_pace_percent <= 100)),
     CHECK (submitted_at IS NULL OR submitted_at >= created_at),
-    CHECK ((status = 'submitted' AND submitted_at IS NOT NULL) OR (status = 'draft' AND submitted_at IS NULL))
+    CONSTRAINT provider_submission_submitted_at_status_check
+        CHECK ((status = 'draft' AND submitted_at IS NULL) OR (status <> 'draft' AND submitted_at IS NOT NULL)),
+    CHECK (review_started_at IS NULL OR review_started_at >= created_at),
+    CHECK (reviewed_at IS NULL OR reviewed_at >= created_at)
+);
+
+CREATE TABLE IF NOT EXISTS provider_submission_review_events (
+    id UUID PRIMARY KEY,
+    submission_id UUID NOT NULL REFERENCES provider_application_submissions(id) ON DELETE CASCADE,
+    actor_user_id UUID NULL REFERENCES auth_users(id) ON DELETE SET NULL,
+    actor_role TEXT NOT NULL,
+    action TEXT NOT NULL,
+    from_status TEXT NULL,
+    to_status TEXT NOT NULL,
+    notes TEXT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (actor_role IN ('admin', 'provider', 'system')),
+    CHECK (action IN ('submitted', 'review_started', 'changes_requested', 'approved', 'rejected', 'resubmitted')),
+    CHECK (from_status IS NULL OR from_status IN ('draft', 'submitted', 'under_review', 'needs_changes', 'approved', 'rejected')),
+    CHECK (to_status IN ('draft', 'submitted', 'under_review', 'needs_changes', 'approved', 'rejected'))
 );
 

@@ -286,7 +286,7 @@ http://127.0.0.1:8000/docs
 
 ## Request IDs, request logging, and API errors
 
-Sub-project 3.14 adds a cross-cutting middleware/error foundation for the backend. Sub-project 3.15 uses that foundation for centralized token authentication and role-based authorization. API keys and provider submission CRUD are now implemented. Admin review workflow and authenticated React workspaces remain planned later.
+Sub-project 3.14 adds a cross-cutting middleware/error foundation for the backend. Sub-project 3.15 uses that foundation for centralized token authentication and role-based authorization. API keys, provider submission CRUD, and admin review workflow are now implemented. Authenticated React workspaces remain planned later.
 
 ### Request IDs
 
@@ -506,7 +506,7 @@ Provider example:
 
 Auth failures use the standardized error envelope from the 3.14 error system. Missing, malformed, invalid, expired, or revoked bearer tokens return 401. Valid credentials with the wrong role return 403. All responses still include `X-Request-ID`; error bodies include the same request ID.
 
-This is a real internal database-backed auth system for the project, not OAuth, SSO, MFA, JWT, or enterprise IAM. API keys are implemented separately in 3.16 for machine/client access. Provider submission CRUD is now implemented in 3.17. Admin review/decision workflow and authenticated React admin/provider pages are later roadmap steps.
+This is a real internal database-backed auth system for the project, not OAuth, SSO, MFA, JWT, or enterprise IAM. API keys are implemented separately in 3.16 for machine/client access. Provider submission CRUD is implemented in 3.17 and admin review/decision workflow is implemented in 3.18. Authenticated React admin/provider pages are later roadmap steps.
 
 ## Database-backed API keys for machine access
 
@@ -566,9 +566,9 @@ API-key failures use the same standardized 3.14 error envelope as the rest of th
 This is an internal API-key system for this portfolio project. It is not OAuth, SSO, MFA, JWT, an API gateway, or enterprise IAM.
 
 
-## Provider application submission CRUD
+## Provider application submission and admin review workflow
 
-Sub-project 3.17 adds the first provider-owned write-side workflow. Provider submissions are stored in `provider_application_submissions`, a separate table from the historical curated `applications` table. Creating, editing, deleting, or submitting a provider submission never mutates the official MYH application records loaded from Part 2.
+Sub-project 3.17 added provider-owned application submission CRUD. Sub-project 3.18 adds the admin review and decision workflow on top of it. Provider-created submissions are stored in `provider_application_submissions`, a separate write-side workflow table from the historical curated `applications` table. Admin approval is a workflow decision only; it does **not** insert, update, delete, or promote rows in the curated historical MYH `applications` table.
 
 Provider submission routes require a database-issued provider bearer session:
 
@@ -576,7 +576,13 @@ Provider submission routes require a database-issued provider bearer session:
 Authorization: Bearer <database-issued-provider-access-token>
 ```
 
-API keys are not valid for these routes. Admin bearer sessions are also not treated as provider sessions. A missing or invalid bearer token returns 401, and a valid non-provider bearer token returns 403 using the normal error envelope and `X-Request-ID` behavior.
+Admin review routes require a database-issued admin bearer session:
+
+```text
+Authorization: Bearer <database-issued-admin-access-token>
+```
+
+API keys are not valid for provider CRUD or admin review routes. API keys remain separate machine credentials for `GET /export/applications` with `export:read`. Admin bearer tokens are not provider sessions, provider bearer tokens are not admin sessions, and `X-Admin-Token` is not accepted.
 
 Provider endpoints:
 
@@ -589,11 +595,50 @@ DELETE /provider/submissions/{submission_id}
 POST   /provider/submissions/{submission_id}/submit
 ```
 
-The 3.17 statuses are deliberately narrow: `draft` and `submitted`. Providers can update and hard-delete only draft records. Submitting a draft sets `status = submitted` and `submitted_at`; after that, update/delete attempts fail with a standardized conflict response. Submitted records are reserved for the 3.18 admin review/decision workflow. 3.17 does not approve, reject, request changes, or insert submitted rows into the curated historical `applications` table.
+Admin review endpoints:
 
-`GET /provider/submissions` supports clean provider-owned browsing with optional `status`, `target_year`, `limit`, and `offset` query parameters. Reading another provider's submission returns 404 rather than leaking existence with 403.
+```text
+GET  /admin/provider-submissions
+GET  /admin/provider-submissions/{submission_id}
+GET  /admin/provider-submissions/{submission_id}/events
+POST /admin/provider-submissions/{submission_id}/start-review
+POST /admin/provider-submissions/{submission_id}/request-changes
+POST /admin/provider-submissions/{submission_id}/approve
+POST /admin/provider-submissions/{submission_id}/reject
+```
 
-The provider submission table and indexes are created by the same startup-safe schema path used elsewhere in the backend: `schema.sql` and `indexes.sql` are executed by `ensure_database_ready()` using only `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS`. Existing local PostgreSQL databases are upgraded non-destructively when the backend starts or validation code runs. No manual `CREATE TABLE`, manual `CREATE INDEX`, destructive reset, or curated-data reload is required.
+Provider submission statuses after 3.18:
+
+```text
+draft
+submitted
+under_review
+needs_changes
+approved
+rejected
+```
+
+Allowed transitions are deliberately explicit:
+
+```text
+draft -> submitted                  provider submit
+submitted -> under_review            admin start review
+submitted -> needs_changes           admin request changes
+submitted -> approved                admin approve
+submitted -> rejected                admin reject
+under_review -> needs_changes        admin request changes
+under_review -> approved             admin approve
+under_review -> rejected             admin reject
+needs_changes -> submitted           provider resubmit
+```
+
+Providers can update their own `draft` and `needs_changes` submissions. Providers can hard-delete only their own `draft` submissions. Providers cannot edit or delete `submitted`, `under_review`, `approved`, or `rejected` submissions. Providers cannot patch `status`, ownership fields, timestamps, or review fields directly. Reading another provider's submission returns 404 to avoid leaking record existence.
+
+Admins can list the review queue, read any provider submission, start review, request changes, approve, reject, and inspect review/status-transition events. Review metadata is stored on the submission (`review_started_at`, `reviewed_by_user_id`, `reviewed_at`, and `review_notes`) and review history is stored in `provider_submission_review_events` with actor, action, from/to status, notes, and timestamp.
+
+The database upgrade is code-managed and non-destructive. Existing 3.17 local databases are upgraded by `ensure_database_ready()` through application code: the old `draft/submitted` status constraint is replaced with the 3.18 status constraint, review metadata columns are added, the review event table is created, and review indexes are created. No manual table, column, constraint, or index creation is required; no destructive reset is required; curated data, admin notes, auth users, access tokens, API keys, and existing provider submissions are preserved.
+
+Admin review failures use the same 3.14 error envelope and request ID behavior as the rest of the backend. Invalid workflow transitions return 409 Conflict. Missing/invalid bearer auth returns 401. Wrong roles return 403. Missing submissions return 404. Success and failure responses include `X-Request-ID`, and error bodies include the same request id.
 
 Local validation commands from repository root:
 
@@ -806,7 +851,7 @@ Current refresh behavior:
 - reloads lookup tables and applications,
 - includes source-check metadata when a manifest is available,
 - does not download or replace source Excel files,
-- preserves local `application_notes`, `auth_users`, `auth_access_tokens`, and `api_keys` rows.
+- preserves local `application_notes`, `auth_users`, `auth_access_tokens`, `api_keys`, `provider_application_submissions`, and `provider_submission_review_events` rows.
 
 Optional guardrail:
 
@@ -834,47 +879,36 @@ python backend/scripts/demo_api.py --print-only
 
 The smoke test checks the root endpoint, `/health`, `/health/db`, `/operations/source-status`, refresh, core browsing/statistics/provider/export endpoints, and important guardrails. Admin-note and API-key management endpoints are shown in the demo helper and covered by focused route tests. Runtime API-key flows should be tested manually with a database-issued admin bearer token from `/auth/login`.
 
-## 3.17 scope boundary
+## 3.18 scope boundary
 
-Implemented by the end of 3.17:
+Implemented by the end of 3.18:
 
-- MYH source-check service,
-- local JSON manifest support,
-- `GET /operations/source-status`,
-- `POST /operations/check-source`,
-- refresh response metadata and optional recent-source-check guardrail,
-- manual `check_source_status.py` script,
-- focused tests for source-check logic and operation routes,
-- README/control-file updates,
+- MYH source-check service and operation endpoints,
 - protected admin application notes under `/admin`,
-- `application_notes` local metadata table,
-- database-backed auth users with salted PBKDF2 password hashes,
-- opaque bearer access tokens with hashed storage, expiry, and logout/revocation,
+- database-backed `auth_users` and `auth_access_tokens`,
+- salted PBKDF2 password hashes and opaque bearer access tokens,
 - `/auth/login`, `/auth/whoami`, and `/auth/logout`,
-- admin-note protection through database-issued admin bearer tokens,
-- provider bearer tokens rejected from admin routes with 403,
-- safe startup database seeder through `schema.sql` and `indexes.sql`,
-- React + TypeScript dashboard in `part_3/frontend`,
+- admin/provider bearer-session role checks,
+- safe startup database seeder through `schema.sql`, code-managed review upgrade logic, and `indexes.sql`,
+- React + TypeScript public dashboard in `part_3/frontend`,
 - local-development CORS for the Vite dashboard,
-- request ID handling with `X-Request-ID`,
-- safe request logging middleware,
-- standardized safe error response envelopes,
-- focused middleware and error-handler tests,
+- request ID handling with `X-Request-ID`, safe request logging, and standardized error response envelopes,
 - database-backed `api_keys` table,
 - hashed API key storage with raw key returned once,
 - admin-only API key create/list/revoke endpoints,
 - `X-API-Key` machine authentication separate from bearer user sessions,
 - `export:read` scope requirement on `GET /export/applications`,
 - public read/statistics/provider endpoints preserved without API keys,
-- API-key utility, repository, dependency, route, export-protection, and regression tests,
 - provider-authenticated submission CRUD under `/provider/submissions`,
-- `provider_application_submissions` table and provider submission indexes created by startup-safe schema initialization,
-- draft-only update/delete behavior and submit transition to `submitted`,
-- provider submission repository, route, schema, auth-boundary, and regression tests.
+- `provider_application_submissions` with statuses `draft`, `submitted`, `under_review`, `needs_changes`, `approved`, and `rejected`,
+- `provider_submission_review_events` for review/status-transition history,
+- admin-authenticated review endpoints under `/admin/provider-submissions`,
+- provider update/resubmission after `needs_changes`,
+- code-managed non-destructive upgrade of existing 3.17 databases,
+- focused schema, repository, route, auth-boundary, request-ID, and regression tests.
 
-Still not implemented after 3.17:
+Still not implemented after 3.18:
 
-- admin review/decision workflow,
 - authenticated React admin/provider workspace,
 - ML extension,
 - automatic source-file download and curated CSV replacement,

@@ -188,7 +188,49 @@ def main() -> None:
             "Provider submission submit",
             "POST",
             "/provider/submissions/{submission_id}/submit",
-            "Moves a draft submission to submitted for future admin review; not called by default.",
+            "Moves a draft or needs_changes submission to submitted for admin review; not called by default.",
+            call_by_default=False,
+        ),
+        DemoStep(
+            "Admin review queue",
+            "GET",
+            "/admin/provider-submissions",
+            "Lists submitted/under-review/needs-changes provider submissions using Authorization: Bearer <admin-token>; not called by default.",
+            call_by_default=False,
+        ),
+        DemoStep(
+            "Admin review detail",
+            "GET",
+            "/admin/provider-submissions/{submission_id}",
+            "Reads any provider submission with review metadata using an admin bearer token; not called by default.",
+            call_by_default=False,
+        ),
+        DemoStep(
+            "Admin start review",
+            "POST",
+            "/admin/provider-submissions/{submission_id}/start-review",
+            "Moves a submitted provider submission to under_review; not called by default.",
+            call_by_default=False,
+        ),
+        DemoStep(
+            "Admin request changes",
+            "POST",
+            "/admin/provider-submissions/{submission_id}/request-changes",
+            "Returns a submitted/under_review provider submission to the provider with review notes; not called by default.",
+            call_by_default=False,
+        ),
+        DemoStep(
+            "Admin approve submission",
+            "POST",
+            "/admin/provider-submissions/{submission_id}/approve",
+            "Approves the provider submission as workflow state only; it does not mutate historical applications; not called by default.",
+            call_by_default=False,
+        ),
+        DemoStep(
+            "Admin review events",
+            "GET",
+            "/admin/provider-submissions/{submission_id}/events",
+            "Reads ordered status-transition history for one provider submission; not called by default.",
             call_by_default=False,
         ),
         DemoStep(
@@ -254,7 +296,7 @@ def main() -> None:
                 extra = "open in browser"
             elif step.title == "Manual source check":
                 extra = "not called by default; run from /docs or use the check_source_status.py script"
-            elif step.title in {"Protected admin notes", "Protected admin note list", "Protected admin note patch", "Admin API key creation", "Admin API key list", "Admin API key revoke"}:
+            elif step.title in {"Protected admin notes", "Protected admin note list", "Protected admin note patch", "Admin API key creation", "Admin API key list", "Admin API key revoke", "Admin review queue", "Admin review detail", "Admin start review", "Admin request changes", "Admin approve submission", "Admin review events"}:
                 extra = "not called by default; log in through /auth/login and send Authorization: Bearer <admin-token> from /docs or curl"
             elif step.title.startswith("Provider submission") or step.title == "Provider login":
                 extra = "not called by default; log in through /auth/login and send Authorization: Bearer <provider-token> from /docs or curl"

@@ -93,3 +93,27 @@ CREATE INDEX IF NOT EXISTS idx_provider_submissions_target_year
 CREATE INDEX IF NOT EXISTS idx_provider_submissions_created_at
     ON provider_application_submissions (created_at DESC);
 
+
+CREATE INDEX IF NOT EXISTS idx_provider_submissions_reviewed_by_user_id
+    ON provider_application_submissions (reviewed_by_user_id);
+
+CREATE INDEX IF NOT EXISTS idx_provider_submissions_review_started_at
+    ON provider_application_submissions (review_started_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_provider_submissions_reviewed_at
+    ON provider_application_submissions (reviewed_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_provider_submissions_provider_status
+    ON provider_application_submissions (provider_id, status);
+
+CREATE INDEX IF NOT EXISTS idx_provider_submission_review_events_submission_id
+    ON provider_submission_review_events (submission_id);
+
+CREATE INDEX IF NOT EXISTS idx_provider_submission_review_events_actor_user_id
+    ON provider_submission_review_events (actor_user_id);
+
+CREATE INDEX IF NOT EXISTS idx_provider_submission_review_events_action
+    ON provider_submission_review_events (action);
+
+CREATE INDEX IF NOT EXISTS idx_provider_submission_review_events_created_at
+    ON provider_submission_review_events (created_at ASC);

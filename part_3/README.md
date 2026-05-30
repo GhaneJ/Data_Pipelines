@@ -4,7 +4,7 @@
 
 Part 3 turns the curated Part 2 MYH applications dataset into a small internal data service.
 
-The project shows the path from a trusted curated dataset to PostgreSQL storage, a FastAPI API, protected admin metadata operations, a React + TypeScript dashboard that consumes the public API, a cross-cutting middleware/error foundation, database-backed authentication with issued bearer tokens, a separate database-backed API key system for machine export access, and provider-owned application submission CRUD. The remaining roadmap adds admin review workflow, authenticated workspaces, operational hardening, and a small explainable ML layer in staged steps. The implementation stays practical and explainable while using normal professional structure where it solves real project problems.
+The project shows the path from a trusted curated dataset to PostgreSQL storage, a FastAPI API, protected admin metadata operations, a React + TypeScript dashboard that consumes the public API, a cross-cutting middleware/error foundation, database-backed authentication with issued bearer tokens, a separate database-backed API key system for machine export access, and provider-owned application submission CRUD, and admin-authenticated provider submission review workflow. The remaining roadmap adds authenticated workspaces, operational hardening, and a small explainable ML layer in staged steps. The implementation stays practical and explainable while using normal professional structure where it solves real project problems.
 
 ## Source of truth
 
@@ -31,7 +31,7 @@ Sub-project 3.12.1 adds safe database seeder/startup initialization. The Postgre
 
 Sub-project 3.13 adds a React + TypeScript dashboard under `frontend/`. It consumes public backend endpoints for health, database readiness, statistics, trends, filtered application browsing, and application detail. Protected admin-note endpoints are intentionally not exposed in the public dashboard.
 
-Sub-project 3.14 adds request IDs, safe request logging, and standardized error envelopes. Sub-project 3.15 added centralized RBAC foundations. Sub-project 3.15.1 replaces the transitional environment-token identity source with PostgreSQL auth users, salted PBKDF2 password hashes, database-issued opaque bearer access tokens, hashed token storage, expiry, logout/revocation, `/auth/login`, database-backed `/auth/whoami`, and admin/provider role checks. Provider submission CRUD is implemented in 3.17. Admin review workflow, authenticated frontend workspace, OAuth/SSO/MFA, and ML remain outside this sub-project. API keys are implemented separately in 3.16 and do not replace user login sessions.
+Sub-project 3.14 adds request IDs, safe request logging, and standardized error envelopes. Sub-project 3.15 added centralized RBAC foundations. Sub-project 3.15.1 replaces the transitional environment-token identity source with PostgreSQL auth users, salted PBKDF2 password hashes, database-issued opaque bearer access tokens, hashed token storage, expiry, logout/revocation, `/auth/login`, database-backed `/auth/whoami`, and admin/provider role checks. Provider submission CRUD is implemented in 3.17 and admin review workflow is implemented in 3.18. Authenticated frontend workspace, OAuth/SSO/MFA, and ML remain outside this sub-project. API keys are implemented separately in 3.16 and do not replace user login sessions.
 
 ## Implementation principles
 
@@ -44,11 +44,11 @@ Sub-project 3.14 adds request IDs, safe request logging, and standardized error 
 - Add structure only when it improves maintainability, validation, operations, or later roadmap work.
 - Keep generated runtime files and internal handoff/control files outside Git tracking.
 
-## Current project shape after Sub-project 3.17
+## Current project shape after Sub-project 3.18
 
 Sub-project 3.10 reorganized the backend into routers and services, added database readiness checks, logging, centralized database-error handling, and focused pytest coverage.
 
-Sub-project 3.11 added a modest scheduled-source-check foundation and refresh metadata upgrade. Sub-project 3.12 added protected admin notes as a safe write-side use case. Sub-project 3.12.1 added safe startup schema initialization with a single SQL schema source of truth. Sub-project 3.13 added the React + TypeScript visualization dashboard and minimal local-development CORS support for the Vite dev server. Sub-project 3.14 added request-context middleware, request logging middleware, and centralized safe error responses. Sub-project 3.15.1 adds database-backed login sessions and role-based authorization for admin and provider principals. Sub-project 3.16 adds database-backed API keys for machine access, scoped `X-API-Key` dependencies, admin-only key management, and API-key protection for CSV exports. Sub-project 3.17 adds provider-only submission CRUD for draft and submitted provider proposals.
+Sub-project 3.11 added a modest scheduled-source-check foundation and refresh metadata upgrade. Sub-project 3.12 added protected admin notes as a safe write-side use case. Sub-project 3.12.1 added safe startup schema initialization with a single SQL schema source of truth. Sub-project 3.13 added the React + TypeScript visualization dashboard and minimal local-development CORS support for the Vite dev server. Sub-project 3.14 added request-context middleware, request logging middleware, and centralized safe error responses. Sub-project 3.15.1 adds database-backed login sessions and role-based authorization for admin and provider principals. Sub-project 3.16 adds database-backed API keys for machine access, scoped `X-API-Key` dependencies, admin-only key management, and API-key protection for CSV exports. Sub-project 3.17 adds provider-only submission CRUD for draft and submitted provider proposals. Sub-project 3.18 adds admin-authenticated review and decision workflow for submitted provider proposals.
 
 ```text
 part_3/
@@ -204,7 +204,7 @@ auth_access_tokens
 api_keys
 ```
 
-The `applications` table remains the central curated-data table. Repeated high-value fields such as provider, education area, location, decision, principal type, and study form are represented through lookup tables. `application_notes`, `auth_users`, `auth_access_tokens`, and `api_keys` are separate local system tables and do not overwrite source data.
+The `applications` table remains the central curated-data table. Repeated high-value fields such as provider, education area, location, decision, principal type, and study form are represented through lookup tables. `application_notes`, `auth_users`, `auth_access_tokens`, `api_keys`, `provider_application_submissions`, and `provider_submission_review_events` are separate local system/workflow tables and do not overwrite source data.
 
 Database initialization has a strict separation of responsibilities:
 
@@ -214,7 +214,7 @@ backend/sql/indexes.sql       safe index definitions, used by startup and loader
 backend/sql/reset_schema.sql  explicit curated-data reset, used only by loader/refresh
 ```
 
-The FastAPI startup seeder runs the safe schema and index files and seeds the fixed decision lookup values with `ON CONFLICT`. It never runs `reset_schema.sql` and never reloads the curated CSV. The loader/refresh workflow uses `reset_schema.sql` explicitly before reloading curated lookup rows and application rows from CSV. `application_notes`, `auth_users`, `auth_access_tokens`, and `api_keys` are preserved across curated-data reloads.
+The FastAPI startup seeder runs the safe schema and index files and seeds the fixed decision lookup values with `ON CONFLICT`. It never runs `reset_schema.sql` and never reloads the curated CSV. The loader/refresh workflow uses `reset_schema.sql` explicitly before reloading curated lookup rows and application rows from CSV. `application_notes`, `auth_users`, `auth_access_tokens`, `api_keys`, `provider_application_submissions`, and `provider_submission_review_events` are preserved across curated-data reloads.
 
 
 Traceability fields from the curated dataset are preserved:
@@ -530,7 +530,7 @@ Provider example:
 
 `POST /auth/logout` revokes the current token. A logged-out, expired, missing, malformed, or unknown token returns a standardized 401 error envelope. A valid provider token on an admin-only route returns a standardized 403 error envelope. Auth success and failure responses include `X-Request-ID`, and the same request ID appears inside the `error` object on failures.
 
-This is a real internal database-backed auth system for the project. It is intentionally not OAuth, SSO, MFA, JWT, or enterprise IAM. API keys are now implemented as a separate machine/client access system in 3.16. Provider submission CRUD is now implemented in 3.17. Admin review workflow and authenticated React admin/provider workspaces remain later roadmap steps.
+This is a real internal database-backed auth system for the project. It is intentionally not OAuth, SSO, MFA, JWT, or enterprise IAM. API keys are now implemented as a separate machine/client access system in 3.16. Provider submission CRUD is implemented in 3.17 and admin review/decision workflow is implemented in 3.18. Authenticated React admin/provider workspaces remain later roadmap steps.
 
 ## Database-backed API keys for machine access
 
@@ -590,9 +590,9 @@ API-key failures use the same standardized 3.14 error envelope as the rest of th
 This is an internal API-key system for this portfolio project. It is not OAuth, SSO, MFA, JWT, an API gateway, or enterprise IAM.
 
 
-## Provider application submission CRUD
+## Provider application submission and admin review workflow
 
-Sub-project 3.17 adds the first provider-owned write-side workflow. Provider submissions are stored in `provider_application_submissions`, a separate table from the historical curated `applications` table. Creating, editing, deleting, or submitting a provider submission never mutates the official MYH application records loaded from Part 2.
+Sub-project 3.17 added provider-owned application submission CRUD. Sub-project 3.18 adds the admin review and decision workflow on top of it. Provider-created submissions are stored in `provider_application_submissions`, a separate write-side workflow table from the historical curated `applications` table. Admin approval is a workflow decision only; it does **not** insert, update, delete, or promote rows in the curated historical MYH `applications` table.
 
 Provider submission routes require a database-issued provider bearer session:
 
@@ -600,7 +600,13 @@ Provider submission routes require a database-issued provider bearer session:
 Authorization: Bearer <database-issued-provider-access-token>
 ```
 
-API keys are not valid for these routes. Admin bearer sessions are also not treated as provider sessions. A missing or invalid bearer token returns 401, and a valid non-provider bearer token returns 403 using the normal error envelope and `X-Request-ID` behavior.
+Admin review routes require a database-issued admin bearer session:
+
+```text
+Authorization: Bearer <database-issued-admin-access-token>
+```
+
+API keys are not valid for provider CRUD or admin review routes. API keys remain separate machine credentials for `GET /export/applications` with `export:read`. Admin bearer tokens are not provider sessions, provider bearer tokens are not admin sessions, and `X-Admin-Token` is not accepted.
 
 Provider endpoints:
 
@@ -613,11 +619,50 @@ DELETE /provider/submissions/{submission_id}
 POST   /provider/submissions/{submission_id}/submit
 ```
 
-The 3.17 statuses are deliberately narrow: `draft` and `submitted`. Providers can update and hard-delete only draft records. Submitting a draft sets `status = submitted` and `submitted_at`; after that, update/delete attempts fail with a standardized conflict response. Submitted records are reserved for the 3.18 admin review/decision workflow. 3.17 does not approve, reject, request changes, or insert submitted rows into the curated historical `applications` table.
+Admin review endpoints:
 
-`GET /provider/submissions` supports clean provider-owned browsing with optional `status`, `target_year`, `limit`, and `offset` query parameters. Reading another provider's submission returns 404 rather than leaking existence with 403.
+```text
+GET  /admin/provider-submissions
+GET  /admin/provider-submissions/{submission_id}
+GET  /admin/provider-submissions/{submission_id}/events
+POST /admin/provider-submissions/{submission_id}/start-review
+POST /admin/provider-submissions/{submission_id}/request-changes
+POST /admin/provider-submissions/{submission_id}/approve
+POST /admin/provider-submissions/{submission_id}/reject
+```
 
-The provider submission table and indexes are created by the same startup-safe schema path used elsewhere in the backend: `schema.sql` and `indexes.sql` are executed by `ensure_database_ready()` using only `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS`. Existing local PostgreSQL databases are upgraded non-destructively when the backend starts or validation code runs. No manual `CREATE TABLE`, manual `CREATE INDEX`, destructive reset, or curated-data reload is required.
+Provider submission statuses after 3.18:
+
+```text
+draft
+submitted
+under_review
+needs_changes
+approved
+rejected
+```
+
+Allowed transitions are deliberately explicit:
+
+```text
+draft -> submitted                  provider submit
+submitted -> under_review            admin start review
+submitted -> needs_changes           admin request changes
+submitted -> approved                admin approve
+submitted -> rejected                admin reject
+under_review -> needs_changes        admin request changes
+under_review -> approved             admin approve
+under_review -> rejected             admin reject
+needs_changes -> submitted           provider resubmit
+```
+
+Providers can update their own `draft` and `needs_changes` submissions. Providers can hard-delete only their own `draft` submissions. Providers cannot edit or delete `submitted`, `under_review`, `approved`, or `rejected` submissions. Providers cannot patch `status`, ownership fields, timestamps, or review fields directly. Reading another provider's submission returns 404 to avoid leaking record existence.
+
+Admins can list the review queue, read any provider submission, start review, request changes, approve, reject, and inspect review/status-transition events. Review metadata is stored on the submission (`review_started_at`, `reviewed_by_user_id`, `reviewed_at`, and `review_notes`) and review history is stored in `provider_submission_review_events` with actor, action, from/to status, notes, and timestamp.
+
+The database upgrade is code-managed and non-destructive. Existing 3.17 local databases are upgraded by `ensure_database_ready()` through application code: the old `draft/submitted` status constraint is replaced with the 3.18 status constraint, review metadata columns are added, the review event table is created, and review indexes are created. No manual table, column, constraint, or index creation is required; no destructive reset is required; curated data, admin notes, auth users, access tokens, API keys, and existing provider submissions are preserved.
+
+Admin review failures use the same 3.14 error envelope and request ID behavior as the rest of the backend. Invalid workflow transitions return 409 Conflict. Missing/invalid bearer auth returns 401. Wrong roles return 403. Missing submissions return 404. Success and failure responses include `X-Request-ID`, and error bodies include the same request id.
 
 Local validation commands from repository root:
 
@@ -833,7 +878,7 @@ To include the operational refresh call in the demo sequence:
 python backend/scripts/demo_api.py --include-refresh
 ```
 
-## Expanded roadmap after 3.17
+## Expanded roadmap after 3.18
 
 The assignment remains the baseline for required deliverables, but the assessor has allowed stronger additions when they remain explainable at vocational/YH-student level and improve the final project/demo value.
 
@@ -849,7 +894,7 @@ Current roadmap:
 3.15 Portfolio-Grade Token Authentication and Role-Based Authorization — completed as RBAC foundation
 3.16 Database-Backed API Key Access System — completed
 3.17 Provider Application Submission CRUD API — completed
-3.18 Admin Review and Decision Workflow API
+3.18 Admin Review and Decision Workflow API — completed
 3.19 Authenticated React Admin and Provider Workspace
 3.20 Scheduled POST/Refresh Operations Hardening
 3.21 Small Explainable ML Extension
@@ -862,7 +907,7 @@ Guiding rule:
 Vocational level means explainable and proportionate, not toy-like or artificially weak. Use normal professional structure when it improves correctness, maintainability, robustness, operations, or presentation value.
 ```
 
-The React dashboard is implemented and consumes public read/statistics endpoints. Central token authentication, role-based authorization, and database-backed API keys are now in place for backend routes. Provider submission CRUD is now implemented. Admin review workflows, authenticated React workspaces, and ML are still planned for later sub-projects.
+The React dashboard is implemented and consumes public read/statistics endpoints. Central token authentication, role-based authorization, and database-backed API keys are now in place for backend routes. Provider submission CRUD and admin review workflow are now implemented. Authenticated React workspaces and ML are still planned for later sub-projects.
 
 ## Git policy
 
