@@ -36,9 +36,11 @@ def fetch_json(method: str, url: str) -> Any:
         return json.loads(response.read().decode("utf-8"))
 
 
-def fetch_csv(url: str) -> list[dict[str, str]]:
+def fetch_csv(url: str, api_key: str | None = None) -> list[dict[str, str]]:
     """Call one CSV endpoint and return parsed rows."""
-    with urlopen(url, timeout=10) as response:
+    headers = {"X-API-Key": api_key} if api_key else {}
+    request = Request(url, headers=headers, method="GET")
+    with urlopen(request, timeout=10) as response:
         csv_text = response.read().decode("utf-8")
     return list(csv.DictReader(io.StringIO(csv_text)))
 
@@ -82,6 +84,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Show a final demo flow for the MYH Applications API.")
     parser.add_argument("--base-url", default="http://127.0.0.1:8000", help="Base URL for the running API.")
     parser.add_argument("--print-only", action="store_true", help="Only print the demo flow; do not call the API.")
+    parser.add_argument("--api-key", help="Database-issued API key with export:read scope for calling the protected CSV export step.")
     parser.add_argument("--include-refresh", action="store_true", help="Also call POST /refresh at the end of the demo flow.")
     args = parser.parse_args()
     base_url = args.base_url.rstrip("/")
@@ -133,6 +136,27 @@ def main() -> None:
             call_by_default=False,
         ),
         DemoStep(
+            "Admin API key creation",
+            "POST",
+            "/admin/api-keys",
+            "Creates a database-backed machine API key using an admin bearer token; the raw key is returned once only.",
+            call_by_default=False,
+        ),
+        DemoStep(
+            "Admin API key list",
+            "GET",
+            "/admin/api-keys",
+            "Lists safe API key metadata without raw keys or hashes.",
+            call_by_default=False,
+        ),
+        DemoStep(
+            "Admin API key revoke",
+            "POST",
+            "/admin/api-keys/{api_key_id}/revoke",
+            "Revokes a machine API key so it can no longer access protected export endpoints.",
+            call_by_default=False,
+        ),
+        DemoStep(
             "Filtered application browsing",
             "GET",
             "/applications?" + urlencode({"source_year": 2024, "decision": "approved", "limit": 3}),
@@ -166,7 +190,7 @@ def main() -> None:
             "Filtered CSV export",
             "GET",
             "/export/applications?" + urlencode({"year": 2024, "decision": "approved", "limit": 10}),
-            "Shows the API can return a downloadable filtered dataset.",
+            "Shows the API can return a downloadable filtered dataset when X-API-Key has export:read scope.",
             response_kind="csv",
         ),
         DemoStep("Interactive API docs", "GET", "/docs", "Open this in the browser to show FastAPI/OpenAPI documentation.", call_by_default=False),
@@ -184,6 +208,8 @@ def main() -> None:
         url = f"{base_url}{path}"
 
         should_call = step.call_by_default and not args.print_only
+        if step.title == "Filtered CSV export" and not args.api_key:
+            should_call = False
         if step.title == "Operational refresh" and args.include_refresh and not args.print_only:
             should_call = True
 
@@ -193,15 +219,17 @@ def main() -> None:
                 extra = "open in browser"
             elif step.title == "Manual source check":
                 extra = "not called by default; run from /docs or use the check_source_status.py script"
-            elif step.title in {"Protected admin notes", "Protected admin note list", "Protected admin note patch"}:
+            elif step.title in {"Protected admin notes", "Protected admin note list", "Protected admin note patch", "Admin API key creation", "Admin API key list", "Admin API key revoke"}:
                 extra = "not called by default; log in through /auth/login and send Authorization: Bearer <admin-token> from /docs or curl"
+            elif step.title == "Filtered CSV export" and not args.api_key:
+                extra = "requires a database-issued X-API-Key with export:read; pass --api-key to call it"
             elif step.title == "Operational refresh" and not args.include_refresh:
                 extra = "not called by default; add --include-refresh to run it"
             print_step(index, step, url, extra)
             continue
 
         if step.response_kind == "csv":
-            rows = fetch_csv(url)
+            rows = fetch_csv(url, api_key=args.api_key)
             columns = list(rows[0]) if rows else []
             result = f"csv_rows={len(rows)}, first_columns={columns[:6]}"
         else:
