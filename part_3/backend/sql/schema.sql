@@ -176,3 +176,37 @@ CREATE TABLE IF NOT EXISTS api_keys (
     CHECK (expires_at IS NULL OR expires_at > created_at),
     CHECK (revoked_at IS NULL OR revoked_at >= created_at)
 );
+
+-- Provider-created application submissions are a separate write-side workflow
+-- table. They do not mutate or replace the historical curated applications
+-- table. Submitted records are reserved for the future admin review workflow.
+CREATE TABLE IF NOT EXISTS provider_application_submissions (
+    id UUID PRIMARY KEY,
+    provider_id TEXT NOT NULL,
+    provider_name TEXT NULL,
+    created_by_user_id UUID NOT NULL REFERENCES auth_users(id) ON DELETE RESTRICT,
+    status TEXT NOT NULL DEFAULT 'draft',
+    target_year SMALLINT NULL,
+    education_name TEXT NOT NULL,
+    education_area TEXT NULL,
+    municipality TEXT NULL,
+    region TEXT NULL,
+    yh_points INTEGER NULL,
+    study_form TEXT NULL,
+    study_pace_percent INTEGER NULL,
+    head_provider_type TEXT NULL,
+    description TEXT NULL,
+    notes TEXT NULL,
+    submitted_at TIMESTAMPTZ NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (btrim(provider_id) <> ''),
+    CHECK (status IN ('draft', 'submitted')),
+    CHECK (target_year IS NULL OR target_year BETWEEN 2020 AND 2100),
+    CHECK (btrim(education_name) <> ''),
+    CHECK (yh_points IS NULL OR yh_points > 0),
+    CHECK (study_pace_percent IS NULL OR (study_pace_percent >= 1 AND study_pace_percent <= 100)),
+    CHECK (submitted_at IS NULL OR submitted_at >= created_at),
+    CHECK ((status = 'submitted' AND submitted_at IS NOT NULL) OR (status = 'draft' AND submitted_at IS NULL))
+);
+
