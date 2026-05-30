@@ -6,7 +6,7 @@ Sub-projects 3.2-3.8 built the working backend gradually: PostgreSQL storage, co
 
 Sub-project 3.10 reorganized that backend into a clearer structure and added database readiness checks, simple logging, centralized database-error handling, and focused pytest coverage.
 
-Sub-project 3.11 added a scheduler-ready MYH source-check foundation, local source-status manifest, source-check operation endpoints, refresh metadata, a manual source-check script, and focused tests that do not depend on live internet access. Sub-project 3.12 adds protected admin application notes as a small safe write-side use case. Sub-project 3.12.1 adds safe database seeder/startup initialization with SQL files as the single schema source of truth. Sub-project 3.13 adds minimal local-development CORS support so the React/Vite dashboard can call the public API from the browser. Sub-project 3.14 adds request IDs, safe request logging, and standardized API error envelopes. Sub-project 3.15 adds centralized RBAC foundations. Sub-project 3.15.1 upgrades authentication to PostgreSQL-backed users, hashed passwords, issued opaque bearer tokens, logout/revocation, and database-backed role authorization. Sub-project 3.16 adds database-backed API keys for machine/client access, admin-only API-key management, scoped `X-API-Key` dependencies, and API-key protection for CSV exports.
+Sub-project 3.11 added a scheduler-ready MYH source-check foundation, local source-status manifest, source-check operation endpoints, refresh metadata, a manual source-check script, and focused tests that do not depend on live internet access. Sub-project 3.12 adds protected admin application notes as a small safe write-side use case. Sub-project 3.12.1 adds safe database seeder/startup initialization with SQL files as the single schema source of truth. Sub-project 3.13 adds minimal local-development CORS support so the React/Vite dashboard can call the public API from the browser. Sub-project 3.14 adds request IDs, safe request logging, and standardized API error envelopes. Sub-project 3.15 adds centralized RBAC foundations. Sub-project 3.15.1 upgrades authentication to PostgreSQL-backed users, hashed passwords, issued opaque bearer tokens, logout/revocation, and database-backed role authorization. Sub-project 3.16 adds database-backed API keys for machine/client access, admin-only API-key management, scoped `X-API-Key` dependencies, and API-key protection for CSV exports. Sub-project 3.17 adds provider-authenticated application submission CRUD in a separate workflow table.
 
 ## Technology choices
 
@@ -52,6 +52,11 @@ backend/
       models.py              API key request/response/principal models
       repositories.py        API key SQL helpers
       routes.py              /admin/api-keys management endpoints
+    provider_submissions/
+      dependencies.py        provider bearer identity for submissions
+      models.py              provider submission request/response models
+      repositories.py        provider submission SQL helpers
+      routes.py              /provider/submissions CRUD endpoints
     core/
       errors.py              standard API error envelope helpers
     middleware/
@@ -81,7 +86,7 @@ backend/
     reset_schema.sql         explicit full-reload reset, never used by startup
     schema.sql               safe CREATE TABLE IF NOT EXISTS schema source
     indexes.sql              safe CREATE INDEX IF NOT EXISTS indexes
-    upgrade_3_16_api_keys.sql optional manual non-destructive API-key upgrade
+    upgrade_3_16_api_keys.sql historical 3.16 upgrade reference; startup schema covers current DB
   scripts/
     load_curated_data.py
     validate_database.py
@@ -108,6 +113,9 @@ backend/
     test_health_service.py
     test_load_curated_data.py
     test_operations_routes.py
+    test_provider_submission_routes.py
+    test_provider_submissions_repositories.py
+    test_provider_submissions_schema.py
     test_routes.py
     test_schemas_and_export.py
     test_source_check_service.py
@@ -278,7 +286,7 @@ http://127.0.0.1:8000/docs
 
 ## Request IDs, request logging, and API errors
 
-Sub-project 3.14 adds a cross-cutting middleware/error foundation for the backend. Sub-project 3.15 uses that foundation for centralized token authentication and role-based authorization. API keys, provider CRUD, admin review workflow, and authenticated React workspaces remain planned later.
+Sub-project 3.14 adds a cross-cutting middleware/error foundation for the backend. Sub-project 3.15 uses that foundation for centralized token authentication and role-based authorization. API keys and provider submission CRUD are now implemented. Admin review workflow and authenticated React workspaces remain planned later.
 
 ### Request IDs
 
@@ -498,7 +506,7 @@ Provider example:
 
 Auth failures use the standardized error envelope from the 3.14 error system. Missing, malformed, invalid, expired, or revoked bearer tokens return 401. Valid credentials with the wrong role return 403. All responses still include `X-Request-ID`; error bodies include the same request ID.
 
-This is a real internal database-backed auth system for the project, not OAuth, SSO, MFA, JWT, or enterprise IAM. API keys are implemented separately in 3.16 for machine/client access. Provider CRUD, admin review/decision workflow, and authenticated React admin/provider pages are later roadmap steps.
+This is a real internal database-backed auth system for the project, not OAuth, SSO, MFA, JWT, or enterprise IAM. API keys are implemented separately in 3.16 for machine/client access. Provider submission CRUD is now implemented in 3.17. Admin review/decision workflow and authenticated React admin/provider pages are later roadmap steps.
 
 ## Database-backed API keys for machine access
 
@@ -556,6 +564,44 @@ The creation response includes `api_key` once. Store it locally; it cannot be re
 API-key failures use the same standardized 3.14 error envelope as the rest of the API. Missing, malformed, invalid, expired, or revoked keys return 401. A valid key without `export:read` returns 403. Success and failure responses keep `X-Request-ID`, and error bodies include the same request id. Logs must not include raw API keys, API key hashes, bearer tokens, or passwords.
 
 This is an internal API-key system for this portfolio project. It is not OAuth, SSO, MFA, JWT, an API gateway, or enterprise IAM.
+
+
+## Provider application submission CRUD
+
+Sub-project 3.17 adds the first provider-owned write-side workflow. Provider submissions are stored in `provider_application_submissions`, a separate table from the historical curated `applications` table. Creating, editing, deleting, or submitting a provider submission never mutates the official MYH application records loaded from Part 2.
+
+Provider submission routes require a database-issued provider bearer session:
+
+```text
+Authorization: Bearer <database-issued-provider-access-token>
+```
+
+API keys are not valid for these routes. Admin bearer sessions are also not treated as provider sessions. A missing or invalid bearer token returns 401, and a valid non-provider bearer token returns 403 using the normal error envelope and `X-Request-ID` behavior.
+
+Provider endpoints:
+
+```text
+POST   /provider/submissions
+GET    /provider/submissions
+GET    /provider/submissions/{submission_id}
+PATCH  /provider/submissions/{submission_id}
+DELETE /provider/submissions/{submission_id}
+POST   /provider/submissions/{submission_id}/submit
+```
+
+The 3.17 statuses are deliberately narrow: `draft` and `submitted`. Providers can update and hard-delete only draft records. Submitting a draft sets `status = submitted` and `submitted_at`; after that, update/delete attempts fail with a standardized conflict response. Submitted records are reserved for the 3.18 admin review/decision workflow. 3.17 does not approve, reject, request changes, or insert submitted rows into the curated historical `applications` table.
+
+`GET /provider/submissions` supports clean provider-owned browsing with optional `status`, `target_year`, `limit`, and `offset` query parameters. Reading another provider's submission returns 404 rather than leaking existence with 403.
+
+The provider submission table and indexes are created by the same startup-safe schema path used elsewhere in the backend: `schema.sql` and `indexes.sql` are executed by `ensure_database_ready()` using only `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS`. Existing local PostgreSQL databases are upgraded non-destructively when the backend starts or validation code runs. No manual `CREATE TABLE`, manual `CREATE INDEX`, destructive reset, or curated-data reload is required.
+
+Local validation commands from repository root:
+
+```bash
+python -m compileall part_3/backend/app part_3/backend/scripts
+python -m pytest part_3/backend/tests
+python part_3/backend/scripts/demo_api.py --print-only
+```
 
 ## Protected admin application notes
 
@@ -788,9 +834,9 @@ python backend/scripts/demo_api.py --print-only
 
 The smoke test checks the root endpoint, `/health`, `/health/db`, `/operations/source-status`, refresh, core browsing/statistics/provider/export endpoints, and important guardrails. Admin-note and API-key management endpoints are shown in the demo helper and covered by focused route tests. Runtime API-key flows should be tested manually with a database-issued admin bearer token from `/auth/login`.
 
-## 3.16 scope boundary
+## 3.17 scope boundary
 
-Implemented by the end of 3.16:
+Implemented by the end of 3.17:
 
 - MYH source-check service,
 - local JSON manifest support,
@@ -820,11 +866,14 @@ Implemented by the end of 3.16:
 - `X-API-Key` machine authentication separate from bearer user sessions,
 - `export:read` scope requirement on `GET /export/applications`,
 - public read/statistics/provider endpoints preserved without API keys,
-- API-key utility, repository, dependency, route, export-protection, and regression tests.
+- API-key utility, repository, dependency, route, export-protection, and regression tests,
+- provider-authenticated submission CRUD under `/provider/submissions`,
+- `provider_application_submissions` table and provider submission indexes created by startup-safe schema initialization,
+- draft-only update/delete behavior and submit transition to `submitted`,
+- provider submission repository, route, schema, auth-boundary, and regression tests.
 
-Still not implemented after 3.16:
+Still not implemented after 3.17:
 
-- provider-submitted application CRUD,
 - admin review/decision workflow,
 - authenticated React admin/provider workspace,
 - ML extension,
