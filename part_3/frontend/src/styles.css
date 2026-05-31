@@ -2247,3 +2247,82 @@ body {
     font-size: 1.35rem !important;
   }
 }
+
+
+/* Package 25: emergency public overview contrast correction.
+   Package 24 softened global surfaces, but it accidentally made the public
+   overview hero too light while older hero text rules still forced white text.
+   This block gives the open-data landing hero a readable, mild enterprise look. */
+.public-open-data-page .open-data-hero,
+.public-open-data-page .data-hero.open-data-hero {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(0, 124, 137, 0.10), transparent 34%),
+    radial-gradient(circle at 8% 0%, rgba(37, 99, 169, 0.08), transparent 30%),
+    linear-gradient(135deg, rgba(250, 253, 255, 0.96), rgba(236, 246, 249, 0.96));
+  color: var(--ink);
+  border: 1px solid #c8d9e6;
+  box-shadow: 0 10px 24px rgba(26, 43, 61, 0.08);
+}
+
+.public-open-data-page .open-data-hero::after {
+  background: rgba(0, 124, 137, 0.055);
+  opacity: 1;
+}
+
+.public-open-data-page .open-data-hero .eyebrow {
+  color: #006c78;
+}
+
+.public-open-data-page .open-data-hero h2,
+.public-open-data-page .open-data-hero h3,
+.public-open-data-page .open-data-hero p,
+.public-open-data-page .open-data-hero .muted {
+  color: var(--ink);
+}
+
+.public-open-data-page .open-data-hero p,
+.public-open-data-page .open-data-hero .muted {
+  color: var(--muted);
+}
+
+.public-open-data-page .public-audience-card {
+  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid #d5e2ec;
+  box-shadow: 0 6px 18px rgba(26, 43, 61, 0.06);
+  backdrop-filter: none;
+}
+
+.public-open-data-page .public-audience-card h3 {
+  color: var(--ink);
+}
+
+.public-open-data-page .public-audience-card p {
+  color: var(--muted);
+}
+
+.public-open-data-page .public-access-list span {
+  background: #f1f7fb;
+  border-color: #d8e5ee;
+  color: #42526a;
+}
+
+.public-open-data-page .data-hero .button.light,
+.public-open-data-page .open-data-hero .button.light {
+  background: #eef6fb;
+  border: 1px solid #c8d9e6;
+  color: #173247;
+  box-shadow: none;
+}
+
+.public-open-data-page .data-hero .button.light:hover,
+.public-open-data-page .open-data-hero .button.light:hover {
+  background: #e4f0f7;
+}
+
+.public-open-data-page .hero-actions .button.link {
+  color: #006c78;
+}
+
+.public-open-data-page .public-overview-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(246, 250, 253, 0.92));
+}
