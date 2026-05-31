@@ -289,8 +289,7 @@ export function ApplicationsBrowser() {
         <p className="muted">Explore official MYH application records with complete filter choices and a wider table view.</p>
       </div>
 
-      <div className="browser-layout refined-browser-layout">
-        <article className="browser-card refined-browser-card">
+      <article className="browser-card refined-browser-card applications-full-width-card">
           <form className="filters smart-filters" onSubmit={handleSubmit}>
             <SearchableTextSelect
               label="Year"
@@ -393,6 +392,10 @@ export function ApplicationsBrowser() {
             emptyText="No applications matched these filters. Try a broader search."
           />
 
+          <div className="application-profile-slot">
+            <ApplicationDetailPanel application={selectedApplication} status={detailStatus} errorMessage={detailError} />
+          </div>
+
           {listStatus === "success" && rows.length > 0 && (
             <div className="table-wrap application-table-wrap">
               <table className="records-table application-records-table">
@@ -417,10 +420,15 @@ export function ApplicationsBrowser() {
                     >
                       <td>{application.source_year}</td>
                       <td>
-                        <button type="button" className="row-button record-primary" onClick={() => setSelectedDiarienummer(application.diarienummer)}>
+                        <button
+                          type="button"
+                          className="row-button record-primary"
+                          onClick={(event) => { event.stopPropagation(); setSelectedDiarienummer(application.diarienummer); }}
+                          aria-label={`Show details for ${application.utbildningsnamn}`}
+                        >
                           {application.utbildningsnamn}
                         </button>
-                        <small className="record-meta">{application.diarienummer}</small>
+                        <small className="record-meta">{application.diarienummer} · View profile card above</small>
                       </td>
                       <td><span className="compact-pill">{application.beslut_normalized}</span></td>
                       <td><span className="record-primary-text">{application.lan}</span></td>
@@ -434,10 +442,7 @@ export function ApplicationsBrowser() {
               </table>
             </div>
           )}
-        </article>
-
-        <ApplicationDetailPanel application={selectedApplication} status={detailStatus} errorMessage={detailError} />
-      </div>
+      </article>
     </section>
   );
 }
