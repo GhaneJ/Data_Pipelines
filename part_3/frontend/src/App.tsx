@@ -4,6 +4,7 @@ import { AppShell } from "@/layouts/AppShell";
 import { AdminDashboardPage } from "@/features/admin/AdminDashboardPage";
 import { AdminApiAccessPage } from "@/features/admin/apiAccess/AdminApiAccessPage";
 import { AdminReviewsPage } from "@/features/admin/reviews/AdminReviewsPage";
+import { AdminOperationsPage } from "@/features/admin/operations/AdminOperationsPage";
 import { AdminSignupRequestsPage } from "@/features/admin/signupRequests/AdminSignupRequestsPage";
 import { AdminUsersPage } from "@/features/admin/users/AdminUsersPage";
 import { DataExplorerPage } from "@/features/dataExplorer/DataExplorerPage";
@@ -67,6 +68,7 @@ function RoutedWorkspace() {
     if (path.startsWith("/admin/signup-requests")) return <ProtectedRoute role="admin" onNavigate={navigate}><AdminSignupRequestsPage onNavigate={navigate} /></ProtectedRoute>;
     if (path.startsWith("/admin/provider-submissions")) return <ProtectedRoute role="admin" onNavigate={navigate}><AdminReviewsPage /></ProtectedRoute>;
     if (path === "/admin/api-access") return <ProtectedRoute role="admin" onNavigate={navigate}><AdminApiAccessPage /></ProtectedRoute>;
+    if (path === "/admin/operations") return <ProtectedRoute role="admin" onNavigate={navigate}><AdminOperationsPage /></ProtectedRoute>;
     if (path === "/provider") return <ProtectedRoute role="provider" onNavigate={navigate}><ProviderDashboardPage onNavigate={navigate} /></ProtectedRoute>;
     if (path.startsWith("/provider/submissions")) return <ProtectedRoute role="provider" onNavigate={navigate}><ProviderWorkspacePage /></ProtectedRoute>;
     return <section className="auth-card"><p className="eyebrow">Not found</p><h2>Page not found</h2><button className="button primary" onClick={() => navigate("/")}>Return home</button></section>;
