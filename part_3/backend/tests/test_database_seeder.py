@@ -75,6 +75,10 @@ def test_project_managed_table_list_is_complete() -> None:
         "provider_submission_review_events",
         "user_registration_requests",
         "auth_admin_events",
+        "myh_source_check_runs",
+        "myh_source_files",
+        "myh_refresh_runs",
+        "admin_notifications",
     }
 
 
