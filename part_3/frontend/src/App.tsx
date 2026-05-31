@@ -1,123 +1,82 @@
-import { useEffect, useState } from "react";
-import { API_BASE_URL, getDatabaseHealth, getHealth } from "@/services/api";
-import type { ApiStatus, DatabaseHealth, HealthStatus } from "@/services/api";
-import { BackendStatusPanel } from "@/components/BackendStatusPanel";
-import { ApplicationsBrowser } from "@/components/ApplicationsBrowser";
-import { CategoryBars } from "@/components/CategoryBars";
-import { DecisionTrendChart } from "@/components/DecisionTrendChart";
-import { StateMessage } from "@/components/StateMessage";
-import { SummaryCards } from "@/components/SummaryCards";
-import { YearTrendChart } from "@/components/YearTrendChart";
-import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
+import { useEffect, useMemo, useState } from "react";
+import { AuthProvider, useAuth } from "@/auth/AuthContext";
+import { AppShell } from "@/layouts/AppShell";
+import { AdminDashboardPage } from "@/features/admin/AdminDashboardPage";
+import { AdminApiAccessPage } from "@/features/admin/apiAccess/AdminApiAccessPage";
+import { AdminReviewsPage } from "@/features/admin/reviews/AdminReviewsPage";
+import { AdminSignupRequestsPage } from "@/features/admin/signupRequests/AdminSignupRequestsPage";
+import { AdminUsersPage } from "@/features/admin/users/AdminUsersPage";
+import { DataExplorerPage } from "@/features/dataExplorer/DataExplorerPage";
+import { ProviderDashboardPage } from "@/features/provider/ProviderDashboardPage";
+import { ProviderWorkspacePage } from "@/features/provider/ProviderWorkspacePage";
+import { ForbiddenPage, LoginPage, SignupPage } from "@/pages";
+import { LoadingState } from "@/components/shared/Feedback";
 import "@/styles.css";
 
-function App() {
-  const [healthStatus, setHealthStatus] = useState<ApiStatus>("idle");
-  const [dbStatus, setDbStatus] = useState<ApiStatus>("idle");
-  const [health, setHealth] = useState<HealthStatus | null>(null);
-  const [databaseHealth, setDatabaseHealth] = useState<DatabaseHealth | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const metrics = useDashboardMetrics();
+function normalizePath(path: string) {
+  return path === "/" ? "/" : path.replace(/\/$/, "");
+}
+
+function useRoute() {
+  const [path, setPath] = useState(normalizePath(window.location.pathname));
 
   useEffect(() => {
-    let isActive = true;
-
-    async function checkBackend() {
-      setHealthStatus("loading");
-      setDbStatus("loading");
-      setHealth(null);
-      setDatabaseHealth(null);
-      setErrorMessage(null);
-
-      try {
-        const healthResult = await getHealth();
-        if (!isActive) return;
-        setHealth(healthResult);
-        setHealthStatus("success");
-      } catch (error) {
-        if (!isActive) return;
-        setHealthStatus("error");
-        setDbStatus("idle");
-        setHealth(null);
-        setDatabaseHealth(null);
-        setErrorMessage(
-          `Could not reach the FastAPI backend at ${API_BASE_URL}. Start the backend from part_3 and confirm /health/db before the demo.`,
-        );
-        return;
-      }
-
-      try {
-        const databaseResult = await getDatabaseHealth();
-        if (!isActive) return;
-        setDatabaseHealth(databaseResult);
-        setDbStatus(databaseResult.status === "ready" ? "success" : "error");
-      } catch (error) {
-        if (!isActive) return;
-        setDbStatus("error");
-        setErrorMessage(
-          "The FastAPI backend is reachable, but the database readiness check failed. Confirm DATABASE_URL and /health/db before the demo.",
-        );
-      }
-    }
-
-    checkBackend();
-
-    return () => {
-      isActive = false;
-    };
+    const onPopState = () => setPath(normalizePath(window.location.pathname));
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  return (
-    <main className="app-shell">
-      <header className="hero">
-        <div>
-          <p className="eyebrow">Data Pipeline Project — Part 3</p>
-          <h1>MYH Applications Dashboard</h1>
-          <p>
-            A React and TypeScript frontend for presenting the curated MYH applications dataset through the existing
-            FastAPI backend.
-          </p>
-        </div>
-      </header>
+  function navigate(nextPath: string) {
+    const normalized = normalizePath(nextPath);
+    window.history.pushState({}, "", normalized);
+    setPath(normalized);
+  }
 
-      <BackendStatusPanel
-        apiBaseUrl={API_BASE_URL}
-        healthStatus={healthStatus}
-        dbStatus={dbStatus}
-        health={health}
-        databaseHealth={databaseHealth}
-        errorMessage={errorMessage}
-      />
+  return { path, navigate };
+}
 
-      <section className="dashboard-section" aria-labelledby="summary-title">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Overview</p>
-            <h2 id="summary-title">Curated application story</h2>
-          </div>
-          <p className="muted">Summary cards and charts use backend aggregation endpoints instead of hardcoded data.</p>
-        </div>
-        <StateMessage
-          status={metrics.status}
-          errorText={metrics.errorMessage}
-          isEmpty={metrics.yearStats.length === 0}
-          emptyText="No statistics were returned by the backend."
-        />
-        {metrics.status === "success" && metrics.yearStats.length > 0 && (
-          <>
-            <SummaryCards yearStats={metrics.yearStats} decisionStats={metrics.decisionStats} />
-            <section className="chart-grid" aria-label="Trend charts">
-              <YearTrendChart data={metrics.yearStats} />
-              <DecisionTrendChart data={metrics.decisionTrend} />
-            </section>
-            <CategoryBars regions={metrics.regionStats} educationAreas={metrics.educationAreaStats} />
-          </>
-        )}
-      </section>
+function ProtectedRoute({ role, children, onNavigate }: { role: "admin" | "provider"; children: React.ReactNode; onNavigate: (path: string) => void }) {
+  const { user, status } = useAuth();
+  if (status === "checking") return <LoadingState text="Checking session..." />;
+  if (!user) return <LoginPage onNavigate={onNavigate} />;
+  if (user.role !== role) return <ForbiddenPage onNavigate={onNavigate} />;
+  return <>{children}</>;
+}
 
-      <ApplicationsBrowser />
-    </main>
-  );
+function HomeRedirect({ onNavigate }: { onNavigate: (path: string) => void }) {
+  const { user, status } = useAuth();
+  useEffect(() => {
+    if (status === "authenticated" && user?.role === "admin") onNavigate("/admin");
+    else if (status === "authenticated" && user?.role === "provider") onNavigate("/provider");
+    else if (status === "anonymous") onNavigate("/login");
+  }, [status, user, onNavigate]);
+  return <LoadingState text="Opening workspace..." />;
+}
+
+function RoutedWorkspace() {
+  const { path, navigate } = useRoute();
+  const main = useMemo(() => {
+    if (path === "/" ) return <HomeRedirect onNavigate={navigate} />;
+    if (path === "/login") return <LoginPage onNavigate={navigate} />;
+    if (path === "/signup") return <SignupPage onNavigate={navigate} />;
+    if (path === "/data") return <DataExplorerPage view="overview" onNavigate={navigate} />;
+    if (path === "/data/stats") return <DataExplorerPage view="stats" onNavigate={navigate} />;
+    if (path === "/data/applications") return <DataExplorerPage view="applications" onNavigate={navigate} />;
+    if (path === "/admin") return <ProtectedRoute role="admin" onNavigate={navigate}><AdminDashboardPage onNavigate={navigate} /></ProtectedRoute>;
+    if (path.startsWith("/admin/users")) return <ProtectedRoute role="admin" onNavigate={navigate}><AdminUsersPage /></ProtectedRoute>;
+    if (path.startsWith("/admin/signup-requests")) return <ProtectedRoute role="admin" onNavigate={navigate}><AdminSignupRequestsPage onNavigate={navigate} /></ProtectedRoute>;
+    if (path.startsWith("/admin/provider-submissions")) return <ProtectedRoute role="admin" onNavigate={navigate}><AdminReviewsPage /></ProtectedRoute>;
+    if (path === "/admin/api-access") return <ProtectedRoute role="admin" onNavigate={navigate}><AdminApiAccessPage /></ProtectedRoute>;
+    if (path === "/provider") return <ProtectedRoute role="provider" onNavigate={navigate}><ProviderDashboardPage onNavigate={navigate} /></ProtectedRoute>;
+    if (path.startsWith("/provider/submissions")) return <ProtectedRoute role="provider" onNavigate={navigate}><ProviderWorkspacePage /></ProtectedRoute>;
+    return <section className="auth-card"><p className="eyebrow">Not found</p><h2>Page not found</h2><button className="button primary" onClick={() => navigate("/")}>Return home</button></section>;
+  }, [path, navigate]);
+
+  return <AppShell currentPath={path} onNavigate={navigate}>{main}</AppShell>;
+}
+
+function App() {
+  return <AuthProvider><RoutedWorkspace /></AuthProvider>;
 }
 
 export default App;

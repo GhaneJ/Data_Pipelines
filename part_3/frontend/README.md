@@ -1,8 +1,8 @@
-# Part 3 Frontend — React + TypeScript Dashboard
+# Part 3 Frontend — Authenticated React Workspace
 
-This folder contains the Sub-project 3.13 dashboard for the MYH applications data service.
+This folder contains the React + TypeScript browser workspace for Part 3.
 
-The dashboard is intentionally presentation-friendly and vocational/YH-student explainable. It is not a separate production product. It consumes the existing FastAPI backend and helps demonstrate that the curated dataset can be used by another part of a system.
+Sub-project 3.19 extends the previous public dashboard into a real authenticated portal that uses the backend 3.15.1 database-issued bearer sessions, the 3.16 API-key boundary, the 3.17 provider submission API, and the 3.18 admin review workflow.
 
 ## Stack
 
@@ -15,26 +15,27 @@ plain CSS
 Vitest + Testing Library
 ```
 
-No admin token is stored in frontend code. Protected admin-note endpoints are not exposed in the public dashboard.
+The app does not use JWT, OAuth, fake frontend users, `X-Admin-Token`, or API keys for human login.
 
 ## Backend requirement
 
-Start the backend first from `part_3` and make sure `DATABASE_URL` points to the existing local PostgreSQL database:
+Start the backend first from `part_3`:
 
 ```bash
 python -m uvicorn backend.app.main:app --reload
 ```
 
-Useful backend checks:
+Make sure `DATABASE_URL` points to the local PostgreSQL database before starting the backend.
 
-```text
-http://127.0.0.1:8000/health/db
-http://127.0.0.1:8000/docs
+PowerShell example:
+
+```powershell
+$env:DATABASE_URL="postgresql://postgres:postgres@localhost:5432/myh_applications"
 ```
 
 ## Frontend configuration
 
-The default API base URL is:
+The default backend URL is:
 
 ```text
 http://127.0.0.1:8000
@@ -70,20 +71,98 @@ Open the Vite URL, normally:
 http://localhost:5173
 ```
 
-## Dashboard features
+## Routes
 
-The dashboard includes:
+```text
+/login
+/signup
+/admin
+/admin/users
+/admin/signup-requests
+/admin/provider-submissions
+/admin/api-access
+/provider
+/provider/submissions
+/data
+/data/applications
+/data/stats
+```
 
-- API reachability and database-readiness status,
-- summary cards for total applications, decisions, year range, and approval-rate movement,
-- applications-by-year chart,
-- decision trend chart,
-- region and education-area charts,
-- bounded filterable application browser,
-- selected application detail panel,
-- loading, empty, and error states for safer demos.
+Root `/` redirects according to the current authenticated role, or to `/login` when no human session exists.
 
-## Public API endpoints consumed
+## Authentication behavior
+
+The login page calls:
+
+```text
+POST /auth/login
+GET  /auth/whoami
+POST /auth/logout
+```
+
+The bearer token is stored in `sessionStorage`, not `localStorage`. The shared API client attaches:
+
+```text
+Authorization: Bearer <database-issued-session-token>
+```
+
+when a user session exists. It clears the session on `401` and surfaces backend request IDs on errors.
+
+The React workspace never sends `X-API-Key` for human login, admin screens, provider screens, or route guarding.
+
+## Controlled signup flow
+
+The public signup/request-access page calls:
+
+```text
+POST /auth/registration-requests
+```
+
+This creates a pending provider access request only. It does not create an active login session and it does not allow public admin signup. The provider is chosen through a searchable provider-name picker backed by the existing public `/providers?q=...` endpoint, so users do not need to type raw provider IDs.
+
+Admin users review those requests through:
+
+```text
+/admin/signup-requests
+```
+
+Approval creates the real active provider user. Rejection preserves the request history without creating a user.
+
+## Admin workspace
+
+Admin users can:
+
+- view summary cards for users, pending signup requests, and provider review work,
+- manage users,
+- create admin/provider users with searchable provider-name selection for provider ownership,
+- update safe user metadata,
+- deactivate/reactivate users,
+- reset passwords,
+- inspect/revoke sessions,
+- review provider access requests,
+- inspect the API-key boundary,
+- review provider submissions and workflow events.
+
+Passwords, bearer tokens, token hashes, API key values, and API key hashes are never displayed.
+
+## Provider workspace
+
+Provider users can:
+
+- view only their own provider submissions,
+- create drafts,
+- edit drafts,
+- submit drafts for admin review,
+- see status badges,
+- see admin feedback on `needs_changes`,
+- edit and resubmit `needs_changes`,
+- see final approved/rejected states.
+
+The frontend hides blocked actions by workflow state, while the backend remains the authority for authorization and workflow transitions.
+
+## Public/shared data explorer
+
+The `/data` area keeps the original dashboard behavior, but presents it as a polished public intelligence dashboard with a stronger hero section, KPI ribbon, chart grid, and filterable application browser. It consumes public backend endpoints such as:
 
 ```text
 GET /health
@@ -98,15 +177,18 @@ GET /stats/trends/by-decision
 GET /stats/trends/by-education-area
 ```
 
-The public dashboard does not call:
+Public MYH historical data remains separate from provider-created workflow submissions.
+
+## API-key boundary
+
+The admin API access page explains the machine-access boundary. API keys remain for scoped machine clients, especially:
 
 ```text
-/admin/...
-POST /refresh
-POST /operations/check-source
+GET /export/applications
+X-API-Key: <database-issued-api-key with export:read>
 ```
 
-Those backend features should be validated separately from the API/docs/tests when needed.
+API keys do not grant React login, admin workspace access, provider workspace access, signup approval, or provider submission review.
 
 ## Validation
 
@@ -114,9 +196,9 @@ From `part_3/frontend`:
 
 ```bash
 npm install
-npm run build
 npm run lint
-npm test
+npm test -- --run
+npm run build
 ```
 
 `npm run lint` is intentionally lightweight: it runs TypeScript type-checking with `tsc --noEmit`.
@@ -130,4 +212,6 @@ node_modules/
 dist/
 .vite/
 coverage/
+tsconfig.tsbuildinfo
+tsconfig.node.tsbuildinfo
 ```

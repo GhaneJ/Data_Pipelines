@@ -157,6 +157,48 @@ def main() -> None:
             call_by_default=False,
         ),
         DemoStep(
+            "Provider access request",
+            "POST",
+            "/auth/registration-requests",
+            "Creates a pending provider access request from the public signup form; it does not create an active login by itself.",
+            call_by_default=False,
+        ),
+        DemoStep(
+            "Admin registration request list",
+            "GET",
+            "/admin/registration-requests",
+            "Lists controlled signup requests for admin approval/rejection using an admin bearer token; not called by default.",
+            call_by_default=False,
+        ),
+        DemoStep(
+            "Admin registration request approve",
+            "POST",
+            "/admin/registration-requests/{request_id}/approve",
+            "Approves a pending provider request and creates the real active provider user; not called by default.",
+            call_by_default=False,
+        ),
+        DemoStep(
+            "Admin user list",
+            "GET",
+            "/admin/users",
+            "Lists safe admin/provider user metadata without password hashes or session token hashes; not called by default.",
+            call_by_default=False,
+        ),
+        DemoStep(
+            "Admin user create",
+            "POST",
+            "/admin/users",
+            "Creates an admin or provider user through admin-only user management; not called by default.",
+            call_by_default=False,
+        ),
+        DemoStep(
+            "Admin session revoke",
+            "POST",
+            "/admin/users/{user_id}/sessions/{session_id}/revoke",
+            "Revokes one database-issued bearer session through admin-only session management; not called by default.",
+            call_by_default=False,
+        ),
+        DemoStep(
             "Provider login",
             "POST",
             "/auth/login",
@@ -296,8 +338,28 @@ def main() -> None:
                 extra = "open in browser"
             elif step.title == "Manual source check":
                 extra = "not called by default; run from /docs or use the check_source_status.py script"
-            elif step.title in {"Protected admin notes", "Protected admin note list", "Protected admin note patch", "Admin API key creation", "Admin API key list", "Admin API key revoke", "Admin review queue", "Admin review detail", "Admin start review", "Admin request changes", "Admin approve submission", "Admin review events"}:
+            elif step.title in {
+                "Protected admin notes",
+                "Protected admin note list",
+                "Protected admin note patch",
+                "Admin API key creation",
+                "Admin API key list",
+                "Admin API key revoke",
+                "Admin registration request list",
+                "Admin registration request approve",
+                "Admin user list",
+                "Admin user create",
+                "Admin session revoke",
+                "Admin review queue",
+                "Admin review detail",
+                "Admin start review",
+                "Admin request changes",
+                "Admin approve submission",
+                "Admin review events",
+            }:
                 extra = "not called by default; log in through /auth/login and send Authorization: Bearer <admin-token> from /docs or curl"
+            elif step.title == "Provider access request":
+                extra = "not called by default; this is the public signup/request-access flow and creates only a pending request"
             elif step.title.startswith("Provider submission") or step.title == "Provider login":
                 extra = "not called by default; log in through /auth/login and send Authorization: Bearer <provider-token> from /docs or curl"
             elif step.title == "Filtered CSV export" and not args.api_key:

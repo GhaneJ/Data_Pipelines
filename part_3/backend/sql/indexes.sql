@@ -117,3 +117,34 @@ CREATE INDEX IF NOT EXISTS idx_provider_submission_review_events_action
 
 CREATE INDEX IF NOT EXISTS idx_provider_submission_review_events_created_at
     ON provider_submission_review_events (created_at ASC);
+
+CREATE INDEX IF NOT EXISTS idx_user_registration_requests_username
+    ON user_registration_requests (requested_username);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_registration_requests_pending_username_unique
+    ON user_registration_requests (requested_username)
+    WHERE status = 'pending';
+
+CREATE INDEX IF NOT EXISTS idx_user_registration_requests_status
+    ON user_registration_requests (status);
+
+CREATE INDEX IF NOT EXISTS idx_user_registration_requests_provider_id
+    ON user_registration_requests (provider_id);
+
+CREATE INDEX IF NOT EXISTS idx_user_registration_requests_created_at
+    ON user_registration_requests (created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_auth_admin_events_actor_user_id
+    ON auth_admin_events (actor_user_id);
+
+CREATE INDEX IF NOT EXISTS idx_auth_admin_events_target_user_id
+    ON auth_admin_events (target_user_id);
+
+CREATE INDEX IF NOT EXISTS idx_auth_admin_events_registration_request_id
+    ON auth_admin_events (registration_request_id);
+
+CREATE INDEX IF NOT EXISTS idx_auth_admin_events_action
+    ON auth_admin_events (action);
+
+CREATE INDEX IF NOT EXISTS idx_auth_admin_events_created_at
+    ON auth_admin_events (created_at DESC);

@@ -1,8 +1,16 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { getApplicationByDiarienummer, getApplications } from "@/services/api";
+import {
+  getApplicationByDiarienummer,
+  getApplications,
+  getStatsByEducationArea,
+  getStatsByRegion,
+  getStatsByYear,
+} from "@/services/api";
 import type { ApiStatus, ApplicationFilters, ApplicationList, ApplicationRecord } from "@/services/api";
+import { searchProviders } from "@/api/providers";
 import { ApplicationDetailPanel } from "@/components/ApplicationDetailPanel";
 import { StateMessage } from "@/components/StateMessage";
+import { SearchableTextSelect } from "@/components/shared/SearchableTextSelect";
 
 const DEFAULT_PAGE_SIZE = 25;
 const PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
@@ -19,6 +27,16 @@ const DEFAULT_FILTERS: ApplicationFilters = {
   offset: 0,
 };
 
+interface FilterOptionPool {
+  years: string[];
+  decisions: string[];
+  regions: string[];
+  municipalities: string[];
+  providers: string[];
+  educationAreas: string[];
+  studyForms: string[];
+}
+
 function normalizeFilters(filters: ApplicationFilters, offset = 0): ApplicationFilters {
   const limit = filters.limit ?? DEFAULT_PAGE_SIZE;
 
@@ -27,6 +45,23 @@ function normalizeFilters(filters: ApplicationFilters, offset = 0): ApplicationF
     source_year: filters.source_year === "" ? undefined : filters.source_year,
     limit,
     offset,
+  };
+}
+
+function addOption(target: Set<string>, value: string | null | undefined) {
+  const trimmed = value?.trim();
+  if (trimmed) target.add(trimmed);
+}
+
+function emptyOptionPool(): FilterOptionPool {
+  return {
+    years: [],
+    decisions: ["approved", "rejected", "withdrawn"],
+    regions: [],
+    municipalities: [],
+    providers: [],
+    educationAreas: [],
+    studyForms: [],
   };
 }
 
@@ -40,6 +75,102 @@ export function ApplicationsBrowser() {
   const [selectedApplication, setSelectedApplication] = useState<ApplicationRecord | null>(null);
   const [detailStatus, setDetailStatus] = useState<ApiStatus>("idle");
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [optionPool, setOptionPool] = useState<FilterOptionPool>(emptyOptionPool);
+  const [providerSearchOptions, setProviderSearchOptions] = useState<string[]>([]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadFilterOptions() {
+      try {
+        const [yearStats, firstPage, regions, educationAreas] = await Promise.all([
+          getStatsByYear(),
+          getApplications({ limit: 100, offset: 0 }),
+          getStatsByRegion(),
+          getStatsByEducationArea(),
+        ]);
+        if (!isActive) return;
+
+        const years = new Set<string>();
+        const decisions = new Set<string>(["approved", "rejected", "withdrawn"]);
+        const regionSet = new Set<string>();
+        const municipalitySet = new Set<string>();
+        const providerSet = new Set<string>();
+        const educationSet = new Set<string>();
+        const studyFormSet = new Set<string>();
+
+        const collectFromPage = (page: ApplicationList) => {
+          page.items.forEach((item) => {
+            addOption(years, String(item.source_year));
+            addOption(decisions, item.beslut_normalized);
+            addOption(regionSet, item.lan);
+            addOption(municipalitySet, item.kommun);
+            addOption(providerSet, item.utbildningsanordnare);
+            addOption(educationSet, item.utbildningsomrade);
+            addOption(studyFormSet, item.studieform);
+          });
+        };
+
+        yearStats.forEach((year) => addOption(years, String(year.source_year)));
+        regions.forEach((region) => addOption(regionSet, region.lan));
+        educationAreas.forEach((area) => addOption(educationSet, area.utbildningsomrade));
+        collectFromPage(firstPage);
+
+        const pageSize = Math.max(firstPage.limit || 100, 1);
+        const offsets = Array.from(
+          { length: Math.max(0, Math.ceil(firstPage.total / pageSize) - 1) },
+          (_, index) => (index + 1) * pageSize,
+        );
+
+        const remainingPages = await Promise.all(offsets.map((offset) => getApplications({ limit: pageSize, offset }).catch(() => null)));
+        if (!isActive) return;
+        remainingPages.forEach((page) => {
+          if (page) collectFromPage(page);
+        });
+
+        setOptionPool({
+          years: Array.from(years).sort((left, right) => Number(right) - Number(left)),
+          decisions: Array.from(decisions).sort((left, right) => left.localeCompare(right, "sv-SE")),
+          regions: Array.from(regionSet).sort((left, right) => left.localeCompare(right, "sv-SE")),
+          municipalities: Array.from(municipalitySet).sort((left, right) => left.localeCompare(right, "sv-SE")),
+          providers: Array.from(providerSet).sort((left, right) => left.localeCompare(right, "sv-SE")),
+          educationAreas: Array.from(educationSet).sort((left, right) => left.localeCompare(right, "sv-SE")),
+          studyForms: Array.from(studyFormSet).sort((left, right) => left.localeCompare(right, "sv-SE")),
+        });
+      } catch {
+        // Filter options are a UX layer. The main list still works without them.
+      }
+    }
+
+    void loadFilterOptions();
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+    const query = (filters.provider ?? "").trim();
+    if (query.length < 1) {
+      setProviderSearchOptions([]);
+      return;
+    }
+
+    const timeout = window.setTimeout(async () => {
+      try {
+        const result = await searchProviders({ q: query, limit: 50 });
+        if (!isActive) return;
+        setProviderSearchOptions(result.items.map((provider) => provider.utbildningsanordnare));
+      } catch {
+        if (isActive) setProviderSearchOptions([]);
+      }
+    }, 180);
+
+    return () => {
+      isActive = false;
+      window.clearTimeout(timeout);
+    };
+  }, [filters.provider]);
 
   useEffect(() => {
     let isActive = true;
@@ -119,8 +250,12 @@ export function ApplicationsBrowser() {
   const totalText = useMemo(() => {
     if (!applicationList) return "No page loaded yet";
     if (totalApplications === 0) return "No matching applications";
-    return `Showing ${firstShown.toLocaleString("sv-SE")}–${lastShown.toLocaleString("sv-SE")} of ${totalApplications.toLocaleString("sv-SE")} matching applications`;
+    return `Showing ${firstShown.toLocaleString("sv-SE")}–${lastShown.toLocaleString("sv-SE")} of ${totalApplications.toLocaleString("sv-SE")} applications`;
   }, [applicationList, firstShown, lastShown, totalApplications]);
+
+  const providerOptions = useMemo(() => {
+    return Array.from(new Set([...providerSearchOptions, ...optionPool.providers]));
+  }, [optionPool.providers, providerSearchOptions]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -145,101 +280,75 @@ export function ApplicationsBrowser() {
   }
 
   return (
-    <section className="dashboard-section" aria-labelledby="applications-browser-title">
+    <section className="dashboard-section applications-explorer" aria-labelledby="applications-browser-title">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Browse records</p>
-          <h2 id="applications-browser-title">Filterable applications</h2>
+          <p className="eyebrow">Historical application records</p>
+          <h2 id="applications-browser-title">Applications browser</h2>
         </div>
-        <p className="muted">A bounded paginated browser using /applications limit/offset and /applications/{"{diarienummer}"}.</p>
+        <p className="muted">Explore official MYH application records with complete filter choices and a wider table view.</p>
       </div>
 
-      <div className="browser-layout">
-        <article className="browser-card">
-          <form className="filters" onSubmit={handleSubmit}>
-            <label>
-              <span>Year</span>
-              <select
-                value={filters.source_year ?? ""}
-                onChange={(event) =>
-                  setFilters((current) => ({
-                    ...current,
-                    source_year: event.target.value === "" ? "" : Number(event.target.value),
-                  }))
-                }
-              >
-                <option value="">All years</option>
-                {[2025, 2024, 2023, 2022, 2021, 2020].map((year) => (
-                  <option value={year} key={year}>{year}</option>
-                ))}
-              </select>
-            </label>
+      <article className="browser-card refined-browser-card applications-full-width-card">
+          <form className="filters smart-filters" onSubmit={handleSubmit}>
+            <SearchableTextSelect
+              label="Year"
+              value={filters.source_year === undefined ? "" : String(filters.source_year)}
+              options={optionPool.years}
+              placeholder="Search year"
+              onChange={(value) => setFilters((current) => ({ ...current, source_year: value === "" ? "" : Number(value) }))}
+            />
+            <SearchableTextSelect
+              label="Decision"
+              value={filters.decision ?? ""}
+              options={optionPool.decisions}
+              placeholder="Search decision"
+              onChange={(value) => setFilters((current) => ({ ...current, decision: value }))}
+            />
+            <SearchableTextSelect
+              label="Region/län"
+              value={filters.region ?? ""}
+              options={optionPool.regions}
+              placeholder="Search region"
+              onChange={(value) => setFilters((current) => ({ ...current, region: value }))}
+            />
+            <SearchableTextSelect
+              label="Municipality"
+              value={filters.municipality ?? ""}
+              options={optionPool.municipalities}
+              placeholder="Search municipality"
+              onChange={(value) => setFilters((current) => ({ ...current, municipality: value }))}
+            />
+            <SearchableTextSelect
+              label="Provider"
+              value={filters.provider ?? ""}
+              options={providerOptions}
+              placeholder="Search provider name"
+              helperText="Type letters to search providers by organization name."
+              onChange={(value) => setFilters((current) => ({ ...current, provider: value }))}
+            />
+            <SearchableTextSelect
+              label="Education area"
+              value={filters.education_area ?? ""}
+              options={optionPool.educationAreas}
+              placeholder="Search education area"
+              onChange={(value) => setFilters((current) => ({ ...current, education_area: value }))}
+            />
+            <SearchableTextSelect
+              label="Study form"
+              value={filters.study_form ?? ""}
+              options={optionPool.studyForms}
+              placeholder="Search study form"
+              onChange={(value) => setFilters((current) => ({ ...current, study_form: value }))}
+            />
 
-            <label>
-              <span>Decision</span>
-              <select
-                value={filters.decision ?? ""}
-                onChange={(event) => setFilters((current) => ({ ...current, decision: event.target.value }))}
-              >
-                <option value="">All decisions</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-                <option value="withdrawn">Withdrawn</option>
-              </select>
-            </label>
-
-            <label>
-              <span>Region/län</span>
-              <input
-                value={filters.region ?? ""}
-                placeholder="Type län..."
-                onChange={(event) => setFilters((current) => ({ ...current, region: event.target.value }))}
-              />
-            </label>
-
-            <label>
-              <span>Municipality</span>
-              <input
-                value={filters.municipality ?? ""}
-                placeholder="Type municipality..."
-                onChange={(event) => setFilters((current) => ({ ...current, municipality: event.target.value }))}
-              />
-            </label>
-
-            <label>
-              <span>Provider</span>
-              <input
-                value={filters.provider ?? ""}
-                placeholder="Type provider..."
-                onChange={(event) => setFilters((current) => ({ ...current, provider: event.target.value }))}
-              />
-            </label>
-
-            <label>
-              <span>Education area</span>
-              <input
-                value={filters.education_area ?? ""}
-                placeholder="Type education area..."
-                onChange={(event) => setFilters((current) => ({ ...current, education_area: event.target.value }))}
-              />
-            </label>
-
-            <label>
-              <span>Study form</span>
-              <input
-                value={filters.study_form ?? ""}
-                placeholder="Type study form..."
-                onChange={(event) => setFilters((current) => ({ ...current, study_form: event.target.value }))}
-              />
-            </label>
-
-            <div className="filter-actions">
-              <button type="submit">Apply filters</button>
-              <button type="button" className="secondary-button" onClick={handleReset}>Reset</button>
+            <div className="filter-actions form-actions-row">
+              <button type="submit" className="button primary">Apply filters</button>
+              <button type="button" className="button secondary" onClick={handleReset}>Reset</button>
             </div>
           </form>
 
-          <div className="table-meta">
+          <div className="table-meta refined-table-meta">
             <strong>{totalText}</strong>
             <div className="pagination-controls" aria-label="Applications pagination controls">
               <label>
@@ -256,7 +365,7 @@ export function ApplicationsBrowser() {
               </label>
               <button
                 type="button"
-                className="secondary-button compact-button"
+                className="button secondary compact-button"
                 onClick={() => goToPage(currentOffset - currentLimit)}
                 disabled={!canGoPrevious}
               >
@@ -267,7 +376,7 @@ export function ApplicationsBrowser() {
               </span>
               <button
                 type="button"
-                className="secondary-button compact-button"
+                className="button secondary compact-button"
                 onClick={() => goToPage(currentOffset + currentLimit)}
                 disabled={!canGoNext}
               >
@@ -283,16 +392,23 @@ export function ApplicationsBrowser() {
             emptyText="No applications matched these filters. Try a broader search."
           />
 
+          <div className="application-profile-slot">
+            <ApplicationDetailPanel application={selectedApplication} status={detailStatus} errorMessage={detailError} />
+          </div>
+
           {listStatus === "success" && rows.length > 0 && (
-            <div className="table-wrap">
-              <table>
+            <div className="table-wrap application-table-wrap">
+              <table className="records-table application-records-table">
                 <thead>
                   <tr>
                     <th>Year</th>
                     <th>Education</th>
                     <th>Decision</th>
-                    <th>Municipality/län</th>
+                    <th>Region/län</th>
+                    <th>Municipality</th>
                     <th>Provider</th>
+                    <th>Education area</th>
+                    <th>Study form</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -304,24 +420,29 @@ export function ApplicationsBrowser() {
                     >
                       <td>{application.source_year}</td>
                       <td>
-                        <button type="button" className="row-button" onClick={() => setSelectedDiarienummer(application.diarienummer)}>
+                        <button
+                          type="button"
+                          className="row-button record-primary"
+                          onClick={(event) => { event.stopPropagation(); setSelectedDiarienummer(application.diarienummer); }}
+                          aria-label={`Show details for ${application.utbildningsnamn}`}
+                        >
                           {application.utbildningsnamn}
                         </button>
-                        <small>{application.diarienummer}</small>
+                        <small className="record-meta">{application.diarienummer} · View profile card above</small>
                       </td>
-                      <td>{application.beslut_normalized}</td>
-                      <td>{application.kommun} / {application.lan}</td>
-                      <td>{application.utbildningsanordnare}</td>
+                      <td><span className="compact-pill">{application.beslut_normalized}</span></td>
+                      <td><span className="record-primary-text">{application.lan}</span></td>
+                      <td><span className="record-primary-text">{application.kommun}</span></td>
+                      <td><span className="record-primary-text">{application.utbildningsanordnare}</span></td>
+                      <td><span className="record-primary-text">{application.utbildningsomrade}</span></td>
+                      <td><span className="record-primary-text">{application.studieform}</span></td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
-        </article>
-
-        <ApplicationDetailPanel application={selectedApplication} status={detailStatus} errorMessage={detailError} />
-      </div>
+      </article>
     </section>
   );
 }

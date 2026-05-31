@@ -923,3 +923,97 @@ database dumps
 local runtime/generated files such as backend/runtime/source_status.json
 internal handoff/control files
 ```
+
+## Sub-project 3.19 authenticated workspace update
+
+Sub-project 3.19 extends the Part 3 system from a public dashboard plus protected API workflows into a browser-usable authenticated workspace.
+
+The important boundary is unchanged: the official historical `applications` table remains read-oriented MYH data loaded from the curated Part 2 dataset. Provider-created submissions remain separate workflow records and admin approval of a provider submission does not insert that record into `applications`.
+
+### Human login, controlled signup, and machine access
+
+Human users authenticate with the database-backed 3.15.1 bearer-session flow:
+
+```text
+Authorization: Bearer <database-issued-session-token>
+```
+
+Public visitors may request provider access through the controlled signup form. That creates a pending `user_registration_requests` row only. It does not create an active user and it does not log the applicant in. An admin must approve the request before a provider user is created and can log in.
+
+Machine/API-client access remains separate:
+
+```text
+X-API-Key: <database-issued-api-key>
+```
+
+API keys are for scoped machine operations such as `GET /export/applications` with `export:read`. They are not used by the React human workspace and they do not grant admin or provider access.
+
+### New backend capabilities
+
+3.19 adds code-managed tables and indexes for:
+
+```text
+user_registration_requests
+auth_admin_events
+```
+
+The backend exposes public controlled signup and admin-only registration/user-management routes:
+
+```text
+POST   /auth/registration-requests
+GET    /admin/registration-requests
+GET    /admin/registration-requests/{request_id}
+POST   /admin/registration-requests/{request_id}/approve
+POST   /admin/registration-requests/{request_id}/reject
+GET    /admin/users
+POST   /admin/users
+GET    /admin/users/{user_id}
+PATCH  /admin/users/{user_id}
+POST   /admin/users/{user_id}/reset-password
+POST   /admin/users/{user_id}/deactivate
+POST   /admin/users/{user_id}/reactivate
+GET    /admin/users/{user_id}/sessions
+POST   /admin/users/{user_id}/sessions/{session_id}/revoke
+```
+
+Passwords, password hashes, session token hashes, API key hashes, and raw API keys are not returned by user-management responses.
+
+### React workspace
+
+The React app now includes:
+
+```text
+/login
+/signup
+/admin
+/admin/users
+/admin/signup-requests
+/admin/provider-submissions
+/admin/api-access
+/provider
+/provider/submissions
+/data
+/data/applications
+/data/stats
+```
+
+The frontend stores the human bearer token in `sessionStorage`, checks `/auth/whoami` on load, clears the session on logout or `401`, and never uses API keys for human login. Admin screens call admin-only backend routes; provider screens call provider-owned submission routes; the data explorer keeps using public read/statistics endpoints.
+
+### Validation
+
+Backend validation from the repository root:
+
+```bash
+python -m compileall part_3/backend/app part_3/backend/scripts
+python -m pytest part_3/backend/tests
+python part_3/backend/scripts/demo_api.py --print-only
+```
+
+Frontend validation from `part_3/frontend`:
+
+```bash
+npm install
+npm run lint
+npm test -- --run
+npm run build
+```
