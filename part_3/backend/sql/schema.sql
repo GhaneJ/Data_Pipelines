@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS applications (
     sokta_platser_totalt NUMERIC(10, 1),
     beviljade_platser_totalt NUMERIC(10, 1),
 
-    CONSTRAINT applications_source_year_check CHECK (source_year BETWEEN 2020 AND 2025),
+    CONSTRAINT applications_source_year_check CHECK (source_year BETWEEN 2020 AND 2100),
     CONSTRAINT applications_source_row_check CHECK (source_row > 0),
     CONSTRAINT applications_antal_kommuner_check CHECK (antal_kommuner >= 1),
     CONSTRAINT applications_yh_poang_check CHECK (yh_poang > 0),
@@ -291,4 +291,97 @@ CREATE TABLE IF NOT EXISTS auth_admin_events (
         'user_reactivated',
         'session_revoked'
     ))
+);
+
+-- Database-backed MYH source monitoring and refresh operations. These tables
+-- track official MYH source files, check runs, refresh/import runs, and admin
+-- notifications without mixing provider submissions into official data.
+CREATE TABLE IF NOT EXISTS myh_source_check_runs (
+    id UUID PRIMARY KEY,
+    source_url TEXT NOT NULL,
+    status TEXT NOT NULL,
+    started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    finished_at TIMESTAMPTZ NULL,
+    http_status INTEGER NULL,
+    discovered_count INTEGER NOT NULL DEFAULT 0,
+    new_count INTEGER NOT NULL DEFAULT 0,
+    changed_count INTEGER NOT NULL DEFAULT 0,
+    known_count INTEGER NOT NULL DEFAULT 0,
+    message TEXT NULL,
+    error_message TEXT NULL,
+    CHECK (btrim(source_url) <> ''),
+    CHECK (status IN ('running', 'success', 'failed')),
+    CHECK (discovered_count >= 0),
+    CHECK (new_count >= 0),
+    CHECK (changed_count >= 0),
+    CHECK (known_count >= 0)
+);
+
+CREATE TABLE IF NOT EXISTS myh_source_files (
+    id UUID PRIMARY KEY,
+    file_name TEXT NOT NULL,
+    file_url TEXT NOT NULL UNIQUE,
+    file_type TEXT NOT NULL,
+    source_year SMALLINT NULL,
+    status TEXT NOT NULL DEFAULT 'new',
+    first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_checked_at TIMESTAMPTZ NULL,
+    last_downloaded_at TIMESTAMPTZ NULL,
+    last_download_size_bytes BIGINT NULL,
+    last_sha256 TEXT NULL,
+    downloaded_path TEXT NULL,
+    first_check_run_id UUID NULL REFERENCES myh_source_check_runs(id) ON DELETE SET NULL,
+    last_check_run_id UUID NULL REFERENCES myh_source_check_runs(id) ON DELETE SET NULL,
+    last_error TEXT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (btrim(file_name) <> ''),
+    CHECK (btrim(file_url) <> ''),
+    CHECK (file_type IN ('xlsx', 'xlsm', 'xls', 'csv')),
+    CHECK (source_year IS NULL OR source_year BETWEEN 2020 AND 2100),
+    CHECK (status IN ('new', 'known', 'changed', 'ignored', 'imported', 'failed')),
+    CHECK (last_download_size_bytes IS NULL OR last_download_size_bytes >= 0),
+    CHECK (last_sha256 IS NULL OR length(last_sha256) = 64)
+);
+
+CREATE TABLE IF NOT EXISTS myh_refresh_runs (
+    id UUID PRIMARY KEY,
+    source_file_id UUID NULL REFERENCES myh_source_files(id) ON DELETE SET NULL,
+    status TEXT NOT NULL,
+    mode TEXT NOT NULL,
+    started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    finished_at TIMESTAMPTZ NULL,
+    rows_imported INTEGER NULL,
+    affected_years TEXT NULL,
+    source_sha256 TEXT NULL,
+    downloaded_path TEXT NULL,
+    processed_path TEXT NULL,
+    validation_summary TEXT NULL,
+    error_message TEXT NULL,
+    triggered_by_user_id UUID NULL REFERENCES auth_users(id) ON DELETE SET NULL,
+    CHECK (status IN ('running', 'success', 'failed')),
+    CHECK (mode IN ('official_source_file', 'curated_csv_compatibility', 'scheduled_official_source_file')),
+    CHECK (rows_imported IS NULL OR rows_imported >= 0),
+    CHECK (source_sha256 IS NULL OR length(source_sha256) = 64)
+);
+
+CREATE TABLE IF NOT EXISTS admin_notifications (
+    id UUID PRIMARY KEY,
+    notification_type TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'unread',
+    source_file_id UUID NULL REFERENCES myh_source_files(id) ON DELETE SET NULL,
+    refresh_run_id UUID NULL REFERENCES myh_refresh_runs(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    read_at TIMESTAMPTZ NULL,
+    resolved_at TIMESTAMPTZ NULL,
+    actor_user_id UUID NULL REFERENCES auth_users(id) ON DELETE SET NULL,
+    CHECK (btrim(notification_type) <> ''),
+    CHECK (severity IN ('info', 'success', 'warning', 'error')),
+    CHECK (btrim(title) <> ''),
+    CHECK (btrim(message) <> ''),
+    CHECK (status IN ('unread', 'read', 'resolved'))
 );
