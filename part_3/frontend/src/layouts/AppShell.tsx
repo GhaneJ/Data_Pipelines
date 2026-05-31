@@ -8,7 +8,9 @@ export interface NavTarget {
 }
 
 const NAV_TARGETS: NavTarget[] = [
-  { path: "/data", label: "Public data", eyebrow: "Explore" },
+  { path: "/data", label: "Overview", eyebrow: "Public" },
+  { path: "/data/stats", label: "Intelligence", eyebrow: "Public" },
+  { path: "/data/applications", label: "Applications", eyebrow: "Public" },
   { path: "/admin", label: "Dashboard", eyebrow: "Admin", roles: ["admin"] },
   { path: "/admin/users", label: "Users", eyebrow: "Access", roles: ["admin"] },
   { path: "/admin/signup-requests", label: "Access requests", eyebrow: "Approval", roles: ["admin"] },
@@ -43,7 +45,7 @@ export function AppShell({ currentPath, onNavigate, children }: { currentPath: s
             <button
               key={target.path}
               type="button"
-              className={currentPath === target.path || currentPath.startsWith(`${target.path}/`) ? "nav-link active" : "nav-link"}
+              className={currentPath === target.path || (target.path !== "/data" && currentPath.startsWith(`${target.path}/`)) ? "nav-link active" : "nav-link"}
               onClick={() => onNavigate(target.path)}
             >
               {target.eyebrow && <small>{target.eyebrow}</small>}

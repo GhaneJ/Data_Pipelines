@@ -43,8 +43,10 @@ test("public data explorer keeps the original dashboard available", async () => 
   await user.click(screen.getByRole("button", { name: /Open public data explorer/i }));
 
   expect(screen.getByRole("heading", { name: /MYH applications intelligence/i })).toBeInTheDocument();
-  await waitFor(() => expect(screen.getByText((text) => text.replace(/\s/g, "") === "7641")).toBeInTheDocument());
+  await waitFor(() => expect(screen.getAllByText((text) => text.replace(/\s/g, "") === "7641").length).toBeGreaterThan(0));
   await waitFor(() => expect(screen.getAllByText(/Applications intelligence/i).length).toBeGreaterThan(0));
+  await user.click(screen.getByRole("button", { name: /Browse records/i }));
+  await waitFor(() => expect(screen.getByRole("heading", { name: /Applications browser/i })).toBeInTheDocument());
   await waitFor(() => expect(screen.getAllByText("Data Engineer").length).toBeGreaterThan(0));
 });
 

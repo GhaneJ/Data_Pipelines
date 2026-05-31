@@ -59,7 +59,9 @@ function RoutedWorkspace() {
     if (path === "/" ) return <HomeRedirect onNavigate={navigate} />;
     if (path === "/login") return <LoginPage onNavigate={navigate} />;
     if (path === "/signup") return <SignupPage onNavigate={navigate} />;
-    if (path === "/data" || path === "/data/applications" || path === "/data/stats") return <DataExplorerPage />;
+    if (path === "/data") return <DataExplorerPage view="overview" onNavigate={navigate} />;
+    if (path === "/data/stats") return <DataExplorerPage view="stats" onNavigate={navigate} />;
+    if (path === "/data/applications") return <DataExplorerPage view="applications" onNavigate={navigate} />;
     if (path === "/admin") return <ProtectedRoute role="admin" onNavigate={navigate}><AdminDashboardPage onNavigate={navigate} /></ProtectedRoute>;
     if (path.startsWith("/admin/users")) return <ProtectedRoute role="admin" onNavigate={navigate}><AdminUsersPage /></ProtectedRoute>;
     if (path.startsWith("/admin/signup-requests")) return <ProtectedRoute role="admin" onNavigate={navigate}><AdminSignupRequestsPage onNavigate={navigate} /></ProtectedRoute>;
