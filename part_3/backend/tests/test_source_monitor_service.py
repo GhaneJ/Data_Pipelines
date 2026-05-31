@@ -89,6 +89,57 @@ def test_transform_official_excel_file_uses_tabell_3_rules(tmp_path) -> None:
     assert rows[1]["huvudmannatyp_normalized"] == "municipal"
 
 
+def test_transform_accepts_part_2_provider_header_alias(tmp_path) -> None:
+    source_path = tmp_path / "resultat-program-2026.xlsx"
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Tabell 3"
+    sheet.append([
+        "Diarienummer",
+        "Utbildningsnamn",
+        "Utbildningsområde",
+        "Beslut",
+        "Län",
+        "Kommun",
+        "Flera studiekommuner",
+        "Antal kommuner",
+        "YH-poäng",
+        "Studieform",
+        "Studietakt %",
+        "Typ av examen",
+        "Utbildningsanordnare administrativ enhet",
+        "Huvudmannatyp",
+        "Sökta utbildningsomgångar",
+        "Beviljade utbildningsomgångar",
+    ])
+    sheet.append([
+        "MYH 2026/10",
+        "Advanced Data Engineer",
+        "Data/IT",
+        "Beviljad",
+        "Stockholms län",
+        "Stockholm",
+        "Nej",
+        1,
+        400,
+        "Distans",
+        100,
+        "Yrkeshögskoleexamen",
+        "Part 2 Provider AB",
+        "Privat",
+        2,
+        2,
+    ])
+    workbook.save(source_path)
+
+    rows = service.transform_official_source_file(source_path, source_year=2026, source_file_name=source_path.name)
+
+    assert len(rows) == 1
+    assert rows[0]["utbildningsanordnare"] == "Part 2 Provider AB"
+    assert rows[0]["flera_kommuner"] == "Nej"
+    assert rows[0]["examenstyp"] == "Yrkeshögskoleexamen"
+
+
 def test_transform_rejects_duplicate_diarienummer(tmp_path) -> None:
     source_path = tmp_path / "resultat-program-2026.xlsx"
     write_tiny_official_workbook(source_path, duplicate=True)
