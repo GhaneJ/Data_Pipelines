@@ -8,9 +8,9 @@ export interface NavTarget {
 }
 
 const NAV_TARGETS: NavTarget[] = [
-  { path: "/data", label: "Overview", eyebrow: "Public" },
-  { path: "/data/stats", label: "Intelligence", eyebrow: "Public" },
-  { path: "/data/applications", label: "Applications", eyebrow: "Public" },
+  { path: "/data", label: "Open data", eyebrow: "Public" },
+  { path: "/data/stats", label: "Insights", eyebrow: "Public" },
+  { path: "/data/applications", label: "Archive", eyebrow: "Public" },
   { path: "/admin", label: "Dashboard", eyebrow: "Admin", roles: ["admin"] },
   { path: "/admin/users", label: "Users", eyebrow: "Access", roles: ["admin"] },
   { path: "/admin/signup-requests", label: "Access requests", eyebrow: "Approval", roles: ["admin"] },

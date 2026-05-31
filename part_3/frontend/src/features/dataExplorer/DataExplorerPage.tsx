@@ -1,6 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
-import { API_BASE_URL, getDatabaseHealth, getHealth } from "@/services/api";
-import type { ApiStatus, DatabaseHealth, HealthStatus } from "@/services/api";
+import { useMemo } from "react";
 import { ApplicationsBrowser } from "@/components/ApplicationsBrowser";
 import { CategoryBars } from "@/components/CategoryBars";
 import { DecisionTrendChart } from "@/components/DecisionTrendChart";
@@ -11,46 +9,32 @@ import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
 
 export type DataExplorerView = "overview" | "stats" | "applications";
 
-function statusText(status: ApiStatus): string {
-  if (status === "loading") return "Checking";
-  if (status === "success") return "Online";
-  if (status === "error") return "Needs attention";
-  return "Waiting";
-}
-
-function PublicDataHero({
-  apiStatus,
-  dbStatus,
-  errorMessage,
-  onNavigate,
-}: {
-  apiStatus: string;
-  dbStatus: string;
-  errorMessage: string | null;
-  onNavigate: (path: string) => void;
-}) {
+function PublicDataHero({ onNavigate }: { onNavigate: (path: string) => void }) {
   return (
-    <section className="data-hero compact-public-hero">
+    <section className="data-hero compact-public-hero open-data-hero">
       <div className="data-hero-copy">
-        <p className="eyebrow">Public data portal</p>
-        <h2>MYH applications intelligence</h2>
+        <p className="eyebrow">Open data portal</p>
+        <h2>Historical MYH applications, ready to explore</h2>
         <p>
-          A clean read-only entry point for official MYH application history. Start with the overview, inspect trends, then browse the underlying records.
+          Explore the curated public application history from MYH. The portal separates official historical records from internal provider drafts, reviews, users, and machine-access administration.
         </p>
         <div className="hero-actions">
-          <button className="button primary" type="button" onClick={() => onNavigate("/data/stats")}>View intelligence</button>
-          <button className="button secondary" type="button" onClick={() => onNavigate("/data/applications")}>Browse records</button>
-          <a className="button secondary" href={`${API_BASE_URL}/docs`} target="_blank" rel="noreferrer">Open API docs</a>
+          <button className="button primary" type="button" onClick={() => onNavigate("/data/stats")}>View insights</button>
+          <button className="button secondary" type="button" onClick={() => onNavigate("/data/applications")}>Browse archive</button>
+          <button className="button ghost light" type="button" onClick={() => onNavigate("/signup")}>Request provider access</button>
         </div>
       </div>
-      <div className="data-health-card" aria-label="Backend status summary">
-        <span>Connected API</span>
-        <strong>{API_BASE_URL}</strong>
-        <div className="health-grid">
-          <article className={`health-tile health-${apiStatus === "Online" ? "success" : apiStatus === "Needs attention" ? "error" : "loading"}`}><span>API</span><strong>{apiStatus}</strong></article>
-          <article className={`health-tile health-${dbStatus === "Online" ? "success" : dbStatus === "Needs attention" ? "error" : "loading"}`}><span>Database</span><strong>{dbStatus}</strong></article>
+      <div className="public-audience-card" aria-label="Public access summary">
+        <p className="eyebrow">Public access</p>
+        <h3>Open, read-only, historical</h3>
+        <p>
+          Visitors can explore official application history. Providers and administrators sign in for drafts, reviews, onboarding, users, and machine-access operations.
+        </p>
+        <div className="public-access-list">
+          <span>✓ Historical data</span>
+          <span>✓ Trends and filters</span>
+          <span>✓ No workflow records</span>
         </div>
-        {errorMessage && <p className="callout warning" role="alert">{errorMessage}</p>}
       </div>
     </section>
   );
@@ -58,9 +42,9 @@ function PublicDataHero({
 
 function PublicDataTabs({ active, onNavigate }: { active: DataExplorerView; onNavigate: (path: string) => void }) {
   const tabs: Array<{ key: DataExplorerView; label: string; path: string; note: string }> = [
-    { key: "overview", label: "Overview", path: "/data", note: "readiness and story" },
-    { key: "stats", label: "Intelligence", path: "/data/stats", note: "charts and trends" },
-    { key: "applications", label: "Applications", path: "/data/applications", note: "filter and inspect records" },
+    { key: "overview", label: "Open data", path: "/data", note: "scope and key facts" },
+    { key: "stats", label: "Insights", path: "/data/stats", note: "charts and trends" },
+    { key: "applications", label: "Archive", path: "/data/applications", note: "filter and inspect records" },
   ];
 
   return (
@@ -82,11 +66,11 @@ function PublicDataTabs({ active, onNavigate }: { active: DataExplorerView; onNa
 
 function KeyFacts({ rowCount, yearRange }: { rowCount: number | null; yearRange: string }) {
   return (
-    <section className="kpi-ribbon public-kpi-ribbon" aria-label="Public data key facts">
-      <article><span>Application rows</span><strong>{rowCount !== null ? rowCount.toLocaleString("sv-SE") : "—"}</strong><small>from PostgreSQL</small></article>
-      <article><span>Source years</span><strong>{yearRange}</strong><small>MYH Tabell 3 backbone</small></article>
-      <article><span>Access model</span><strong>Public read</strong><small>no browser API key</small></article>
-      <article><span>Workflow data</span><strong>Separated</strong><small>provider submissions are separate</small></article>
+    <section className="kpi-ribbon public-kpi-ribbon" aria-label="Open data key facts">
+      <article><span>Historical records</span><strong>{rowCount !== null ? rowCount.toLocaleString("sv-SE") : "—"}</strong><small>curated MYH applications</small></article>
+      <article><span>Source years</span><strong>{yearRange}</strong><small>Tabell 3 harmonized over time</small></article>
+      <article><span>Public layer</span><strong>Read-only</strong><small>safe for visitors and demos</small></article>
+      <article><span>Internal workflow</span><strong>Signed in</strong><small>providers and admins only</small></article>
     </section>
   );
 }
@@ -94,15 +78,11 @@ function KeyFacts({ rowCount, yearRange }: { rowCount: number | null; yearRange:
 function DataOverview({
   rowCount,
   yearRange,
-  apiStatus,
-  dbStatus,
   metrics,
   onNavigate,
 }: {
   rowCount: number | null;
   yearRange: string;
-  apiStatus: string;
-  dbStatus: string;
   metrics: ReturnType<typeof useDashboardMetrics>;
   onNavigate: (path: string) => void;
 }) {
@@ -115,25 +95,25 @@ function DataOverview({
   return (
     <>
       <KeyFacts rowCount={rowCount} yearRange={yearRange} />
-      <section className="public-overview-grid" aria-label="Public data overview">
+      <section className="public-overview-grid" aria-label="Open data overview">
         <article className="public-overview-card highlight-card">
           <p className="eyebrow">Data story</p>
           <h2>Official application history</h2>
           <p>
-            Explore the curated historical dataset without mixing it with provider workflow drafts. Use the intelligence page for trends and the browser page for individual records.
+            This public area focuses on the historical MYH dataset: years, regions, education areas, decisions, providers, and individual application records. Internal access requests, user administration, API keys, and provider review workflows are kept behind login.
           </p>
           <div className="overview-actions">
-            <button className="button primary" type="button" onClick={() => onNavigate("/data/stats")}>Open intelligence</button>
-            <button className="button secondary" type="button" onClick={() => onNavigate("/data/applications")}>Browse applications</button>
+            <button className="button primary" type="button" onClick={() => onNavigate("/data/stats")}>Open insights</button>
+            <button className="button secondary" type="button" onClick={() => onNavigate("/data/applications")}>Browse archive</button>
           </div>
         </article>
         <article className="public-overview-card">
-          <p className="eyebrow">Readiness</p>
-          <h3>API and database</h3>
+          <p className="eyebrow">Public scope</p>
+          <h3>What visitors can see</h3>
           <dl className="compact-definition-list">
-            <div><dt>API</dt><dd>{apiStatus}</dd></div>
-            <div><dt>Database</dt><dd>{dbStatus}</dd></div>
-            <div><dt>Rows</dt><dd>{rowCount !== null ? rowCount.toLocaleString("sv-SE") : "—"}</dd></div>
+            <div><dt>Records</dt><dd>Historical MYH applications</dd></div>
+            <div><dt>Charts</dt><dd>Aggregated public trends</dd></div>
+            <div><dt>Protected</dt><dd>Users, drafts, reviews, API keys</dd></div>
           </dl>
         </article>
         <article className="public-overview-card">
@@ -170,16 +150,16 @@ function DataStats({ metrics }: { metrics: ReturnType<typeof useDashboardMetrics
     <section className="dashboard-section data-story-panel compact-stats-page" aria-labelledby="summary-title">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Applications intelligence</p>
+          <p className="eyebrow">Historical insights</p>
           <h2 id="summary-title">Trends and distribution</h2>
         </div>
-        <p className="muted">A focused statistics page for annual volume, decision trends, regions, and education areas.</p>
+        <p className="muted">A public statistics page for annual volume, decision trends, regions, and education areas.</p>
       </div>
       <StateMessage
         status={metrics.status}
         errorText={metrics.errorMessage}
         isEmpty={metrics.yearStats.length === 0}
-        emptyText="No statistics were returned by the backend."
+        emptyText="No statistics were returned by the public API."
       />
       {metrics.status === "success" && metrics.yearStats.length > 0 && (
         <>
@@ -196,63 +176,28 @@ function DataStats({ metrics }: { metrics: ReturnType<typeof useDashboardMetrics
 }
 
 export function DataExplorerPage({ view = "overview", onNavigate }: { view?: DataExplorerView; onNavigate: (path: string) => void }) {
-  const [healthStatus, setHealthStatus] = useState<ApiStatus>("idle");
-  const [dbStatus, setDbStatus] = useState<ApiStatus>("idle");
-  const [health, setHealth] = useState<HealthStatus | null>(null);
-  const [databaseHealth, setDatabaseHealth] = useState<DatabaseHealth | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const metrics = useDashboardMetrics();
-
-  useEffect(() => {
-    let isActive = true;
-    async function checkBackend() {
-      setHealthStatus("loading");
-      setDbStatus("loading");
-      try {
-        const healthResult = await getHealth();
-        if (!isActive) return;
-        setHealth(healthResult);
-        setHealthStatus("success");
-        const databaseResult = await getDatabaseHealth();
-        if (!isActive) return;
-        setDatabaseHealth(databaseResult);
-        setDbStatus(databaseResult.status === "ready" ? "success" : "error");
-      } catch {
-        if (!isActive) return;
-        setHealthStatus("error");
-        setDbStatus("idle");
-        setErrorMessage(`Could not reach the FastAPI backend at ${API_BASE_URL}. Start the backend from part_3 and confirm /health/db before the demo.`);
-      }
-    }
-    checkBackend();
-    return () => {
-      isActive = false;
-    };
-  }, []);
 
   const dataStory = useMemo(() => {
     const yearCount = metrics.yearStats.length;
     const firstYear = metrics.yearStats[0]?.source_year;
     const lastYear = metrics.yearStats.at(-1)?.source_year;
+    const rowCount = metrics.yearStats.reduce((sum, item) => sum + item.total_applications, 0);
     return {
-      rowCount: databaseHealth?.applications?.row_count ?? null,
+      rowCount: metrics.yearStats.length > 0 ? rowCount : null,
       yearRange: firstYear && lastYear ? `${firstYear}-${lastYear}` : yearCount > 0 ? `${yearCount} years` : "Waiting for data",
-      apiStatus: health?.status === "ok" ? "Online" : statusText(healthStatus),
-      dbStatus: statusText(dbStatus),
     };
-  }, [databaseHealth, dbStatus, health, healthStatus, metrics.yearStats]);
+  }, [metrics.yearStats]);
 
   return (
-    <div className="page-stack data-explorer split-public-data-page">
-      <PublicDataHero apiStatus={dataStory.apiStatus} dbStatus={dataStory.dbStatus} errorMessage={errorMessage} onNavigate={onNavigate} />
+    <div className="page-stack data-explorer split-public-data-page public-open-data-page">
+      <PublicDataHero onNavigate={onNavigate} />
       <PublicDataTabs active={view} onNavigate={onNavigate} />
 
       {view === "overview" && (
         <DataOverview
           rowCount={dataStory.rowCount}
           yearRange={dataStory.yearRange}
-          apiStatus={dataStory.apiStatus}
-          dbStatus={dataStory.dbStatus}
           metrics={metrics}
           onNavigate={onNavigate}
         />

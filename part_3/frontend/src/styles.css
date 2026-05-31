@@ -1721,3 +1721,529 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Package 22: public pages are open-data only; operational health stays inside admin. */
+.open-data-hero {
+  background:
+    radial-gradient(circle at top right, rgba(125, 211, 252, 0.28), transparent 34%),
+    linear-gradient(135deg, #0f766e 0%, #2563eb 52%, #7c3aed 100%);
+}
+
+.public-audience-card {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 12px;
+  align-self: stretch;
+  padding: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.13);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(14px);
+}
+
+.public-audience-card h3 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 1.28rem;
+  letter-spacing: -0.03em;
+}
+
+.public-audience-card p {
+  margin: 0;
+  color: #e0f2fe;
+  font-size: 0.98rem;
+}
+
+.public-access-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.public-access-list span {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 7px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #f8fafc;
+  font-size: 0.84rem;
+  font-weight: 760;
+}
+
+.public-open-data-page .data-hero .button.light {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.public-open-data-page .data-hero .button.light:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+
+/* Package 23: enterprise typography and visual system refinement.
+   This intentionally moves the UI away from the heavy AI-generated look:
+   lighter type weights, calmer colors, smaller radius, quieter shadows, and
+   a more conventional enterprise navigation system. */
+:root {
+  font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --ink: #172033;
+  --muted: #5f6f86;
+  --subtle: #8a98aa;
+  --line: #d8e0ea;
+  --line-soft: #e7edf4;
+  --panel: #ffffff;
+  --panel-soft: #f7f9fc;
+  --brand: #007c89;
+  --brand-dark: #075e68;
+  --brand-soft: #e8f6f7;
+  --nav: #f8fbff;
+  --nav-ink: #24364b;
+  --nav-muted: #6b7c91;
+  --danger: #b42318;
+  --success: #087443;
+  --warning: #a15c07;
+  --blue: #2563a9;
+  --violet: #6f5cc2;
+  --amber: #c98211;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow: 0 12px 28px rgba(15, 23, 42, 0.07);
+}
+
+body {
+  background: #f2f5f8;
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Typography: less shouty, closer to enterprise product interfaces. */
+strong,
+button,
+.button,
+.secondary-button,
+label,
+th,
+.badge,
+.page-count,
+.pagination-controls label,
+.kpi-ribbon span,
+.filters label,
+.provider-picker,
+.form-grid label,
+.field,
+.inline-filter,
+.inline-form,
+.compact-pill,
+.policy-card strong,
+.metadata dt,
+.detail-list dt,
+.compact-definition-list dt,
+.compact-definition-list dd {
+  font-weight: 600;
+}
+
+.topbar h1,
+.hero h1,
+.hero h2,
+.panel h2,
+.auth-card h2,
+.dashboard-section h2,
+.data-hero h2,
+.public-overview-card h2,
+.application-profile-card h3 {
+  font-weight: 600;
+  letter-spacing: -0.018em;
+}
+
+.topbar h1 { font-size: clamp(1.45rem, 1.85vw, 1.95rem); }
+.hero h1, .hero h2, .panel h2, .auth-card h2, .dashboard-section h2 { font-size: clamp(1.35rem, 1.8vw, 1.85rem); }
+.data-hero h2 { font-size: clamp(1.9rem, 3vw, 2.8rem); }
+.eyebrow { letter-spacing: 0.08em; font-weight: 700; color: #007c89; }
+p, .muted, .field-help { font-weight: 400; }
+
+/* Navigation: calmer, more product-like and less industrial. */
+.portal-shell { grid-template-columns: 248px minmax(0, 1fr); }
+.sidebar {
+  background:
+    linear-gradient(180deg, rgba(0, 124, 137, 0.07), transparent 18%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  color: var(--nav-ink);
+  border-right: 1px solid var(--line-soft);
+  box-shadow: 10px 0 28px rgba(31, 45, 61, 0.06);
+}
+.brand-card {
+  background: #ffffff;
+  border: 1px solid var(--line-soft);
+  color: var(--nav-ink);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+}
+.brand-card span { color: var(--nav-muted); }
+.brand-mark {
+  background: linear-gradient(135deg, #007c89, #2563a9);
+  color: #ffffff !important;
+  border-radius: 10px;
+  font-weight: 700;
+}
+.nav-link {
+  color: var(--nav-ink);
+  border-radius: 10px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  font-weight: 500;
+}
+.nav-link small {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--nav-muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.nav-link span { font-weight: 500; }
+.nav-link:hover {
+  background: #eef7fb;
+  color: #0b5360;
+  transform: none;
+}
+.nav-link.active {
+  background: #e8f6f7;
+  color: #075e68;
+  border-color: #c8e9ed;
+  box-shadow: inset 3px 0 0 #007c89;
+  transform: none;
+}
+
+/* Surfaces: less inflated rounded-card aesthetic. */
+.workspace { padding-top: 24px; }
+.hero,
+.panel,
+.auth-card,
+.dashboard-section,
+.table-panel,
+.data-hero,
+.kpi-ribbon,
+.status-panel,
+.summary-tile,
+.card,
+.chart-card,
+.status-card,
+.category-card,
+.application-detail,
+.applications-browser,
+.browser-card,
+.detail-card,
+.public-overview-card,
+.application-profile-card {
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+.hero, .panel, .dashboard-section, .table-panel, .data-hero { border-color: #dfe7f0; }
+.user-card { border-radius: 12px; box-shadow: var(--shadow-sm); }
+
+/* Buttons and controls: narrower radius and lighter weight. */
+.button,
+.secondary-button,
+.actions button,
+.filter-actions button:first-child,
+.provider-clear,
+.smart-select-clear {
+  border-radius: 8px;
+  font-weight: 600;
+  min-height: 38px;
+}
+.button.primary,
+.filter-actions button:first-child {
+  background: #007c89;
+  box-shadow: 0 7px 16px rgba(0, 124, 137, 0.18);
+}
+.button.primary:hover {
+  box-shadow: 0 9px 20px rgba(0, 124, 137, 0.2);
+}
+.button.secondary,
+.secondary-button,
+.button.ghost {
+  background: #f3f7fa;
+  border-color: #d5e4ea;
+  color: #194a57;
+}
+input,
+select,
+textarea {
+  border-radius: 8px;
+  padding: 10px 11px;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: rgba(0, 124, 137, 0.58);
+  box-shadow: 0 0 0 3px rgba(0, 124, 137, 0.1);
+}
+
+/* Public hero: professional open-data accent without nightclub gradients. */
+.data-hero,
+.open-data-hero {
+  background:
+    linear-gradient(135deg, rgba(0, 124, 137, 0.95), rgba(37, 99, 169, 0.95));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.data-hero::after { opacity: 0.5; }
+.public-audience-card,
+.data-health-card {
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+}
+
+/* Charts: softer axis-like presentation and less comic-like emphasis. */
+.chart-card h3,
+.category-card h3,
+.dashboard-section h3 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.chart-frame svg text,
+.recharts-text,
+.recharts-legend-item-text {
+  font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  fill: #607086 !important;
+}
+.recharts-cartesian-grid line { stroke: #edf2f7; }
+
+/* Tables and badges: compact, readable, and not overly bold. */
+table { border-spacing: 0 7px; }
+th { font-weight: 600; letter-spacing: 0.06em; color: #607086; }
+td { padding: 12px 12px; }
+.row-button,
+.record-primary,
+.records-table td strong {
+  font-weight: 600;
+  color: #006c78;
+}
+.badge,
+.compact-pill {
+  font-weight: 600;
+  padding: 5px 9px;
+}
+.badge-active,
+.badge-approved,
+.role-admin { background: #e7f6ed; color: #087443; }
+.badge-draft,
+.role-provider { background: #eaf1fb; color: #245fa8; }
+.badge-pending,
+.badge-submitted,
+.badge-under-review { background: #fff3d7; color: #8a5208; }
+.badge-needs-changes { background: #fff0df; color: #99500f; }
+
+/* Dashboard composition modules: smaller, cleaner data display. */
+.identity-composition,
+.workflow-meter,
+.runtime-list,
+.compact-definition-list {
+  font-size: 0.94rem;
+}
+.identity-meter-track,
+.workflow-track {
+  height: 7px;
+  border-radius: 999px;
+  background: #edf2f7;
+}
+.workflow-fill,
+.identity-meter-fill {
+  border-radius: 999px;
+}
+.metric-card,
+.summary-tile {
+  min-height: auto;
+}
+.summary-tile strong,
+.metric-card strong,
+.kpi-ribbon strong,
+.mini-metric-grid strong {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* A little more color, but mild: not the earlier rusty/AI palette. */
+.summary-tile:nth-child(4n + 1), .public-overview-card:nth-child(4n + 1) { border-top: 3px solid #4aa6b5; }
+.summary-tile:nth-child(4n + 2), .public-overview-card:nth-child(4n + 2) { border-top: 3px solid #7aa7d9; }
+.summary-tile:nth-child(4n + 3), .public-overview-card:nth-child(4n + 3) { border-top: 3px solid #8bbf9f; }
+.summary-tile:nth-child(4n + 4), .public-overview-card:nth-child(4n + 4) { border-top: 3px solid #d9aa63; }
+
+@media (max-width: 1100px) {
+  .portal-shell { grid-template-columns: 1fr; }
+  .sidebar { border-right: 0; border-bottom: 1px solid var(--line-soft); }
+}
+
+/* Package 24: mild professional theme and KPI scale reduction.
+   Keep the app calm and readable: softer page background, off-white surfaces,
+   smaller numeric KPIs, and a controlled shadow system. */
+:root {
+  --page-bg: #eaf1f7;
+  --page-bg-soft: #f3f7fb;
+  --panel: #fbfdff;
+  --panel-soft: #f5f8fb;
+  --ink: #18263a;
+  --muted: #5f6e82;
+  --line-soft: #dce6ef;
+  --shadow-sm: 0 2px 7px rgba(26, 43, 61, 0.055);
+  --shadow: 0 10px 26px rgba(26, 43, 61, 0.085);
+}
+
+body {
+  background:
+    radial-gradient(circle at 16% 0%, rgba(116, 159, 205, 0.12), transparent 28%),
+    radial-gradient(circle at 92% 12%, rgba(121, 184, 166, 0.10), transparent 24%),
+    linear-gradient(180deg, var(--page-bg-soft) 0%, var(--page-bg) 100%);
+}
+
+.workspace {
+  background: transparent;
+}
+
+.hero,
+.panel,
+.auth-card,
+.dashboard-section,
+.table-panel,
+.data-hero,
+.kpi-ribbon,
+.status-panel,
+.summary-tile,
+.card,
+.chart-card,
+.status-card,
+.category-card,
+.application-detail,
+.applications-browser,
+.browser-card,
+.detail-card,
+.public-overview-card,
+.application-profile-card,
+.public-data-tab,
+.user-card,
+.brand-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(247, 250, 253, 0.92));
+  border-color: var(--line-soft);
+  box-shadow: var(--shadow);
+}
+
+.chart-card,
+.summary-tile,
+.public-overview-card,
+.application-profile-card,
+.table-panel,
+.browser-card,
+.detail-card {
+  box-shadow: 0 8px 22px rgba(26, 43, 61, 0.075);
+}
+
+.public-overview-card.highlight-card {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(82, 177, 168, 0.12), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(246, 250, 253, 0.94));
+}
+
+/* Reduce oversized KPI typography and make numbers feel like enterprise metrics. */
+.big-stat,
+.summary-tile strong,
+.metric-card strong,
+.kpi-ribbon strong,
+.mini-metric-grid strong,
+.insight-card strong,
+.identity-total strong,
+.public-overview-card .big-stat {
+  font-size: clamp(1.28rem, 1.75vw, 1.75rem) !important;
+  font-weight: 600 !important;
+  line-height: 1.16;
+  letter-spacing: -0.018em !important;
+}
+
+.public-overview-card h2 {
+  font-size: clamp(1.25rem, 1.6vw, 1.55rem);
+}
+
+.public-overview-card h3,
+.summary-tile span,
+.kpi-ribbon span,
+.metric-card span,
+.insight-card span {
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.055em;
+}
+
+.public-overview-card p,
+.public-overview-card small,
+.summary-tile small,
+.metric-card small,
+.kpi-ribbon small {
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.public-overview-card {
+  padding: 20px;
+}
+
+.public-overview-card.highlight-card {
+  min-height: 285px;
+}
+
+.compact-definition-list dd {
+  font-weight: 600;
+}
+
+/* Keep public overview readable on large screens without feeling inflated. */
+.public-overview-grid {
+  gap: 14px;
+}
+
+/* Buttons should remain visible but calmer than the earlier heavy teal blocks. */
+.button.primary,
+.filter-actions button:first-child {
+  background: linear-gradient(180deg, #0a8791, #08747d);
+  box-shadow: 0 7px 16px rgba(8, 116, 125, 0.16);
+}
+
+.button.primary:hover,
+.filter-actions button:first-child:hover {
+  box-shadow: 0 9px 20px rgba(8, 116, 125, 0.2);
+}
+
+/* Give data tables and profile areas a gentler contrast against the page. */
+.records-table td {
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.records-table tr.selected-row td {
+  background: #eefaf7;
+}
+
+/* Sidebar keeps the light enterprise style but gains a little depth. */
+.sidebar {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(0, 124, 137, 0.08), transparent 28%),
+    linear-gradient(180deg, #fbfdff 0%, #eef4fa 100%);
+  box-shadow: 8px 0 24px rgba(31, 45, 61, 0.07);
+}
+
+@media (max-width: 820px) {
+  .big-stat,
+  .summary-tile strong,
+  .metric-card strong,
+  .kpi-ribbon strong,
+  .mini-metric-grid strong,
+  .insight-card strong,
+  .identity-total strong {
+    font-size: 1.35rem !important;
+  }
+}
