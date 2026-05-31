@@ -2,7 +2,7 @@
 
 This folder contains the React + TypeScript browser workspace for Part 3.
 
-Sub-project 3.19 extends the previous public dashboard into a real authenticated portal that uses the backend 3.15.1 database-issued bearer sessions, the 3.16 API-key boundary, the 3.17 provider submission API, and the 3.18 admin review workflow.
+Sub-project 3.19 extends the previous public dashboard into a real authenticated portal that uses the backend 3.15.1 database-issued bearer sessions, the 3.16 API-key boundary, the 3.17 provider submission API, and the 3.18 admin review workflow. Sub-project 3.20 adds an admin-only operations page for MYH source monitoring, admin notifications, source-file download/import, and refresh-run inspection.
 
 ## Stack
 
@@ -81,6 +81,7 @@ http://localhost:5173
 /admin/signup-requests
 /admin/provider-submissions
 /admin/api-access
+/admin/operations
 /provider
 /provider/submissions
 /data
@@ -141,9 +142,25 @@ Admin users can:
 - inspect/revoke sessions,
 - review provider access requests,
 - inspect the API-key boundary,
-- review provider submissions and workflow events.
+- review provider submissions and workflow events,
+- operate the MYH source-monitoring and refresh workspace.
 
 Passwords, bearer tokens, token hashes, API key values, and API key hashes are never displayed.
+
+
+## Admin operations page
+
+The `/admin/operations` page is visible only to admin users. It calls the 3.20 admin source-monitoring API and shows:
+
+- source monitor status and configured source URL,
+- last source check and latest refresh/import run,
+- detected MYH official source files with new/changed/known/imported statuses,
+- admin notifications for source-file and refresh events,
+- refresh/import run history with validation and error details,
+- request-ID-aware error panels,
+- admin actions for Check MYH now, download, import, mark read, and resolve.
+
+The import action uses an in-app confirmation dialog through `ConfirmButton`; it does not use browser `prompt()` or `confirm()`. Public visitors and provider users do not see operations navigation and cannot call these endpoints because the backend requires an admin bearer session. Export API keys are not used for this page.
 
 ## Provider workspace
 

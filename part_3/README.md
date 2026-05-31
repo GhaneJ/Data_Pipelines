@@ -4,7 +4,7 @@
 
 Part 3 turns the curated Part 2 MYH applications dataset into a small internal data service.
 
-The project shows the path from a trusted curated dataset to PostgreSQL storage, a FastAPI API, protected admin metadata operations, a React + TypeScript dashboard that consumes the public API, a cross-cutting middleware/error foundation, database-backed authentication with issued bearer tokens, a separate database-backed API key system for machine export access, and provider-owned application submission CRUD, and admin-authenticated provider submission review workflow. The remaining roadmap adds authenticated workspaces, operational hardening, and a small explainable ML layer in staged steps. The implementation stays practical and explainable while using normal professional structure where it solves real project problems.
+The project shows the path from a trusted curated dataset to PostgreSQL storage, a FastAPI API, protected admin metadata operations, a React + TypeScript dashboard, cross-cutting middleware/error handling, database-backed authentication, scoped machine API keys, provider-owned submissions, admin review workflow, authenticated workspaces, and a production-grade MYH source-monitoring and refresh pipeline. The remaining roadmap can add a small explainable ML layer. The implementation stays practical and explainable while using professional structure where it solves real project problems.
 
 ## Source of truth
 
@@ -23,7 +23,7 @@ Main record identifier: diarienummer
 Main grain: one application record per diarienummer
 ```
 
-Sub-project 3.11 added a controlled MYH source-check foundation. It can inspect the configured official MYH result page, record a local source-status manifest, and help decide whether the local curated CSV may be stale. It does **not** automatically download new Excel files or overwrite the curated dataset.
+Sub-project 3.20 upgrades the earlier source-check idea into a database-backed MYH source-monitoring and refresh pipeline. Admins can discover official downloadable MYH result workbooks, receive notifications for new/changed files, download and hash source files into local runtime storage, validate Tabell 3-style data, and import only affected official source years atomically. Provider-created submissions remain separate workflow data and are never inserted into the official historical `applications` table.
 
 Sub-project 3.12 added a protected admin write use case: local application notes stored in a separate metadata table. Admin notes do **not** modify the curated MYH source data. Sub-project 3.15 added the central RBAC shape, and Sub-project 3.15.1 upgrades that boundary to database-backed users, hashed passwords, issued opaque bearer access tokens, token expiry, logout/revocation, and database-backed role authorization. Sub-project 3.16 adds database-backed API keys for machine/client access to protected exports. Sub-project 3.17 adds provider-authenticated application submission CRUD in a separate workflow table.
 
@@ -44,11 +44,11 @@ Sub-project 3.14 adds request IDs, safe request logging, and standardized error 
 - Add structure only when it improves maintainability, validation, operations, or later roadmap work.
 - Keep generated runtime files and internal handoff/control files outside Git tracking.
 
-## Current project shape after Sub-project 3.18
+## Current project shape after Sub-project 3.20
 
 Sub-project 3.10 reorganized the backend into routers and services, added database readiness checks, logging, centralized database-error handling, and focused pytest coverage.
 
-Sub-project 3.11 added a modest scheduled-source-check foundation and refresh metadata upgrade. Sub-project 3.12 added protected admin notes as a safe write-side use case. Sub-project 3.12.1 added safe startup schema initialization with a single SQL schema source of truth. Sub-project 3.13 added the React + TypeScript visualization dashboard and minimal local-development CORS support for the Vite dev server. Sub-project 3.14 added request-context middleware, request logging middleware, and centralized safe error responses. Sub-project 3.15.1 adds database-backed login sessions and role-based authorization for admin and provider principals. Sub-project 3.16 adds database-backed API keys for machine access, scoped `X-API-Key` dependencies, admin-only key management, and API-key protection for CSV exports. Sub-project 3.17 adds provider-only submission CRUD for draft and submitted provider proposals. Sub-project 3.18 adds admin-authenticated review and decision workflow for submitted provider proposals.
+Sub-project 3.11 added a modest scheduled-source-check foundation and refresh metadata upgrade. Sub-project 3.12 added protected admin notes as a safe write-side use case. Sub-project 3.12.1 added safe startup schema initialization with a single SQL schema source of truth. Sub-project 3.13 added the React + TypeScript visualization dashboard and minimal local-development CORS support for the Vite dev server. Sub-project 3.14 added request-context middleware, request logging middleware, and centralized safe error responses. Sub-project 3.15.1 adds database-backed login sessions and role-based authorization for admin and provider principals. Sub-project 3.16 adds database-backed API keys for machine access, scoped `X-API-Key` dependencies, admin-only key management, and API-key protection for CSV exports. Sub-project 3.17 adds provider-only submission CRUD for draft and submitted provider proposals. Sub-project 3.18 adds admin-authenticated review and decision workflow for submitted provider proposals. Sub-project 3.19 connects those backend capabilities to authenticated frontend workspaces. Sub-project 3.20 adds database-backed MYH source monitoring, admin notifications, safe workbook download, validation, atomic official-source import, and an admin operations page.
 
 ```text
 part_3/
@@ -232,7 +232,7 @@ diarienummer
 The API reads from PostgreSQL and provides:
 
 - service and database readiness checks,
-- MYH source-check status and manual source-check operation,
+- admin-only MYH source monitoring, source-file records, notifications, and refresh/import runs,
 - protected admin notes attached to applications,
 - record access,
 - filtered and paginated browsing,
@@ -240,7 +240,7 @@ The API reads from PostgreSQL and provides:
 - provider browsing,
 - filtered CSV export protected by scoped API keys,
 - trend statistics over `source_year`,
-- one controlled operational refresh endpoint.
+- one admin-controlled operational refresh endpoint routed through the robust refresh service.
 
 Implemented endpoints:
 
@@ -248,8 +248,17 @@ Implemented endpoints:
 GET  /
 GET  /health
 GET  /health/db
-GET  /operations/source-status
-POST /operations/check-source
+GET  /admin/source-monitor/status
+POST /admin/source-monitor/check
+GET  /admin/source-files
+GET  /admin/source-files/{source_file_id}
+POST /admin/source-files/{source_file_id}/download
+POST /admin/source-files/{source_file_id}/import
+GET  /admin/refresh-runs
+GET  /admin/refresh-runs/{refresh_run_id}
+GET  /admin/notifications
+POST /admin/notifications/{notification_id}/read
+POST /admin/notifications/{notification_id}/resolve
 GET  /admin/applications/{diarienummer}/notes
 POST /admin/applications/{diarienummer}/notes
 PUT  /admin/notes/{note_id}
@@ -389,67 +398,68 @@ npm test
 
 `npm run lint` currently runs TypeScript type-checking through `tsc --noEmit`, keeping the frontend validation lightweight and explainable.
 
-## MYH source-check foundation
+## MYH source monitoring and refresh operations
 
-Sub-project 3.11 introduces a small source-check layer:
+Sub-project 3.20 replaces the older toy source-status/refresh path with an admin-only operations feature. It uses code-managed PostgreSQL tables for MYH source check runs, detected source files, refresh/import runs, and admin notifications. Startup creates/updates these objects through the existing safe seeder path; no manual SQL should be run.
 
-```text
-backend/app/services/source_check.py
-backend/scripts/check_source_status.py
-backend/runtime/README.md
-```
+The source monitor can:
 
-The source check can:
+- fetch the configured official MYH result page,
+- parse official downloadable result files from page HTML,
+- ignore unrelated and unsupported links such as PDFs,
+- record new, changed, and known files in PostgreSQL,
+- create unread admin notifications for new/changed files and refresh outcomes,
+- download selected official workbooks into `backend/runtime/source_files/`,
+- compute SHA256 for downloaded files,
+- transform Tabell 3-style Excel/CSV input into the project's applications shape,
+- validate required columns, normalized decisions, source years, duplicate `diarienummer`, and row counts,
+- import official rows atomically by replacing only affected `source_year` values,
+- leave users, sessions, API keys, provider submissions, review events, and notifications untouched.
 
-- call the configured MYH result source page,
-- discover visible Excel links when simple link extraction is enough,
-- include configured/allowlisted file names or URLs through environment variables or script arguments,
-- compare the latest visible source year with the local curated CSV `source_year`,
-- write a local JSON manifest at `backend/runtime/source_status.json`,
-- report whether the local curated data appears up to date, possibly stale, or needs manual review.
+Provider-created submissions from the authenticated provider workflow remain separate workflow data. They are never inserted into the official historical `applications` table.
 
-The source check does **not**:
-
-- run as a background service,
-- create an operating-system scheduled task,
-- download and replace raw Excel files,
-- rebuild the Part 2 notebook output,
-- overwrite the curated CSV,
-- refresh PostgreSQL automatically.
-
-Useful environment variables:
+Environment variables:
 
 ```text
-MYH_SOURCE_URL                         # override the official source page URL
-MYH_SOURCE_FILES                       # comma-separated known source file names or URLs
-MYH_SOURCE_STATUS_PATH                 # override backend/runtime/source_status.json
-MYH_CURATED_CSV_PATH                   # explicit curated CSV path for source_year comparison
-MYH_SOURCE_CHECK_TIMEOUT_SECONDS       # HTTP timeout for the source check
+PART3_SOURCE_MONITOR_ENABLED=false
+PART3_SOURCE_MONITOR_INTERVAL_MINUTES=360
+PART3_SOURCE_MONITOR_RUN_ON_STARTUP=false
+PART3_REFRESH_AUTO_IMPORT=false
+PART3_MYH_SOURCE_PAGE_URL=https://www.myh.se/yrkeshogskolan/resultat-ansokningsomgangar/resultat-for-program
+PART3_SOURCE_DOWNLOAD_DIR=backend/runtime/source_files
+PART3_PROCESSED_OUTPUT_DIR=backend/runtime/processed
 ```
 
-Manual script:
+The scheduler is disabled by default and is also disabled in tests. By default, scheduled checks only detect source files and notify admins. Automatic import requires `PART3_REFRESH_AUTO_IMPORT=true` and should remain off for normal local validation.
 
-```bash
-python backend/scripts/check_source_status.py
-python backend/scripts/check_source_status.py --no-write-manifest
-python backend/scripts/check_source_status.py --configured-file resultat-2025.xlsx
-```
-
-API endpoints:
-
-```bash
-curl "http://127.0.0.1:8000/operations/source-status"
-curl -X POST "http://127.0.0.1:8000/operations/check-source"
-```
-
-`GET /operations/source-status` reads the latest local manifest and does not call the internet. If no check has been recorded, it returns `status: "not_checked"`.
-
-`POST /operations/check-source` performs one manual source check and writes/updates the local manifest. It does not modify application data.
-
-Generated source manifests are local runtime files and should not be committed:
+Admin endpoints:
 
 ```text
-backend/runtime/source_status.json
+GET    /admin/source-monitor/status
+POST   /admin/source-monitor/check
+GET    /admin/source-files
+GET    /admin/source-files/{source_file_id}
+POST   /admin/source-files/{source_file_id}/download
+POST   /admin/source-files/{source_file_id}/import
+GET    /admin/refresh-runs
+GET    /admin/refresh-runs/{refresh_run_id}
+GET    /admin/notifications
+POST   /admin/notifications/{notification_id}/read
+POST   /admin/notifications/{notification_id}/resolve
+POST   /refresh
+```
+
+`POST /refresh` is kept for compatibility, but it now requires an admin bearer session and routes through the robust refresh service. Public users, providers, and export-only API keys cannot trigger source checks, downloads, imports, or refreshes.
+
+Generated runtime files are local machine state and should not be committed:
+
+```text
+backend/runtime/source_files/
+backend/runtime/processed/
+backend/runtime/*.xlsx
+backend/runtime/*.xls
+backend/runtime/*.csv
+backend/runtime/*.parquet
 ```
 
 ## Authentication and role-based authorization
@@ -759,74 +769,36 @@ Trend endpoints support `year_from` and `year_to`. Decision trends can be filter
 
 ## Operational refresh
 
-`POST /refresh` still reloads PostgreSQL from the existing curated CSV. It validates required columns and expected dataset assumptions, runs the explicit curated-data reset, recreates the safe schema, reloads lookup tables and applications, and returns a JSON summary. Local `application_notes`, `auth_users`, `auth_access_tokens`, and `api_keys` rows are preserved.
+Sub-project 3.20 keeps `POST /refresh` as a compatibility endpoint, but it is now admin-only and routes through the robust refresh service. Admins can also use the dedicated source-monitoring endpoints to check the MYH source page, download selected official files, validate them, and import only affected official source years.
 
-3.11 adds source-check metadata to the refresh response when a source-status manifest is available. The endpoint remains safe: it does not download new MYH files or overwrite the curated CSV.
-
-Example:
+Compatibility refresh from the existing curated CSV:
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/refresh"
+curl -X POST "http://127.0.0.1:8000/refresh" \
+  -H "Authorization: Bearer <admin-token>"
 ```
 
-Optional guardrail:
+Source-monitoring flow:
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/refresh?require_recent_source_check=true"
+curl -X POST "http://127.0.0.1:8000/admin/source-monitor/check" \
+  -H "Authorization: Bearer <admin-token>"
+
+curl -X POST "http://127.0.0.1:8000/admin/source-files/<source_file_id>/download" \
+  -H "Authorization: Bearer <admin-token>"
+
+curl -X POST "http://127.0.0.1:8000/admin/source-files/<source_file_id>/import" \
+  -H "Authorization: Bearer <admin-token>"
 ```
 
-When `require_recent_source_check=true`, refresh is rejected unless a recent non-error source-check manifest exists. The default maximum age is 24 hours and can be adjusted:
+Refresh/import behavior:
 
-```bash
-curl -X POST "http://127.0.0.1:8000/refresh?require_recent_source_check=true&max_source_check_age_hours=48"
-```
-
-## Local validation flow
-
-From `part_3`, install dependencies once in your normal Python environment:
-
-```bash
-pip install -r backend/requirements.txt
-```
-
-Set `DATABASE_URL`.
-
-Windows PowerShell:
-
-```powershell
-$env:DATABASE_URL="postgresql://postgres:postgres@localhost:5432/myh_applications"
-```
-
-macOS/Linux:
-
-```bash
-export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/myh_applications"
-```
-
-Compile-check the backend:
-
-```bash
-python -m compileall backend/app backend/scripts
-```
-
-Run the focused tests:
-
-```bash
-python -m compileall backend/app backend/scripts
-python -m pytest
-```
-
-Print the final demo sequence without calling the API:
-
-```bash
-python backend/scripts/demo_api.py --print-only
-```
-
-Run the source-check script manually:
-
-```bash
-python backend/scripts/check_source_status.py
-```
+- validates required columns, decisions, years, duplicates, and row counts,
+- computes SHA256 for downloaded source files,
+- records source check runs, detected source files, refresh runs, and admin notifications,
+- uses transactions and rolls back failed imports,
+- replaces only affected official source years for official source imports,
+- preserves users, sessions, API keys, provider submissions, review events, and admin notifications.
 
 Load or refresh the database from the curated CSV:
 
@@ -852,7 +824,7 @@ Manual browser/API checks:
 http://127.0.0.1:8000/
 http://127.0.0.1:8000/health
 http://127.0.0.1:8000/health/db
-http://127.0.0.1:8000/operations/source-status
+http://127.0.0.1:8000/admin/source-monitor/status
 http://127.0.0.1:8000/admin/applications/{diarienummer}/notes
 http://127.0.0.1:8000/does-not-exist
 http://127.0.0.1:8000/applications?limit=wrong
@@ -878,7 +850,7 @@ To include the operational refresh call in the demo sequence:
 python backend/scripts/demo_api.py --include-refresh
 ```
 
-## Expanded roadmap after 3.18
+## Expanded roadmap after 3.20
 
 The assignment remains the baseline for required deliverables, but the assessor has allowed stronger additions when they remain explainable at vocational/YH-student level and improve the final project/demo value.
 
@@ -895,8 +867,8 @@ Current roadmap:
 3.16 Database-Backed API Key Access System — completed
 3.17 Provider Application Submission CRUD API — completed
 3.18 Admin Review and Decision Workflow API — completed
-3.19 Authenticated React Admin and Provider Workspace
-3.20 Scheduled POST/Refresh Operations Hardening
+3.19 Authenticated React Admin and Provider Workspace — completed
+3.20 Scheduled MYH Source Monitoring, Admin Notifications, and Production-Grade Refresh Pipeline — completed
 3.21 Small Explainable ML Extension
 3.22 Final Integration, Presentation Update, and Submission Cleanup
 ```
@@ -907,7 +879,7 @@ Guiding rule:
 Vocational level means explainable and proportionate, not toy-like or artificially weak. Use normal professional structure when it improves correctness, maintainability, robustness, operations, or presentation value.
 ```
 
-The React dashboard is implemented and consumes public read/statistics endpoints. Central token authentication, role-based authorization, and database-backed API keys are now in place for backend routes. Provider submission CRUD and admin review workflow are now implemented. Authenticated React workspaces and ML are still planned for later sub-projects.
+The React dashboard is implemented and consumes public read/statistics endpoints. Central token authentication, role-based authorization, and database-backed API keys are in place for backend routes. Provider submission CRUD, admin review workflow, authenticated React workspaces, and admin source-monitoring operations are implemented. ML remains planned for the next sub-project.
 
 ## Git policy
 
@@ -920,7 +892,7 @@ virtual environments
 node_modules
 .env files
 database dumps
-local runtime/generated files such as backend/runtime/source_status.json
+local runtime/generated files such as backend/runtime/source_files/, backend/runtime/processed/, and backend/runtime/source_status.json
 internal handoff/control files
 ```
 
@@ -990,6 +962,7 @@ The React app now includes:
 /admin/signup-requests
 /admin/provider-submissions
 /admin/api-access
+/admin/operations
 /provider
 /provider/submissions
 /data
@@ -1017,3 +990,12 @@ npm run lint
 npm test -- --run
 npm run build
 ```
+
+
+## Sub-project 3.20 source monitoring and refresh update
+
+Sub-project 3.20 turns the refresh idea into an admin operations feature. The backend now has code-managed tables for `myh_source_check_runs`, `myh_source_files`, `myh_refresh_runs`, and `admin_notifications`. The frontend now has `/admin/operations` for source monitor status, detected source files, notifications, refresh history, request-ID-aware failures, and in-app confirmation before imports.
+
+The official historical `applications` table remains distinct from provider-created workflow submissions. Official-source imports are validated and transactional. Provider submissions, review events, users, sessions, API keys, and notifications are not reset or promoted into historical MYH data.
+
+Runtime downloads and processed outputs belong under `backend/runtime/source_files/` and `backend/runtime/processed/` and must not be committed.
