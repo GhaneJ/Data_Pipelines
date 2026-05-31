@@ -914,3 +914,72 @@ Still not implemented after 3.18:
 - automatic source-file download and curated CSV replacement,
 - production scheduler or background worker,
 - ORM conversion.
+
+## Sub-project 3.19 authenticated workspace backend
+
+3.19 keeps the existing 3.15.1 database-backed authentication model. It does not add JWT, OAuth, `X-Admin-Token`, frontend-only fake roles, or API-key login.
+
+### Controlled provider signup
+
+Public provider signup is a request workflow, not instant self-registration:
+
+```text
+POST /auth/registration-requests
+```
+
+The request captures requested username, display name, password hash, provider ownership, optional email/organization/message, and status. New requests start as `pending`. They do not create an active `auth_users` row until an admin approves them.
+
+Admin review endpoints:
+
+```text
+GET  /admin/registration-requests
+GET  /admin/registration-requests/{request_id}
+POST /admin/registration-requests/{request_id}/approve
+POST /admin/registration-requests/{request_id}/reject
+```
+
+Approval creates an active provider user with the existing password hashing/session login system. Rejection preserves the request for history and does not create a user.
+
+### Admin user management
+
+Admin-only user-management endpoints:
+
+```text
+GET    /admin/users
+POST   /admin/users
+GET    /admin/users/{user_id}
+PATCH  /admin/users/{user_id}
+POST   /admin/users/{user_id}/reset-password
+POST   /admin/users/{user_id}/deactivate
+POST   /admin/users/{user_id}/reactivate
+GET    /admin/users/{user_id}/sessions
+POST   /admin/users/{user_id}/sessions/{session_id}/revoke
+```
+
+Admins can create admin/provider users, update safe profile fields, reset passwords, deactivate/reactivate users, inspect safe session metadata, and revoke sessions. Provider users require a provider ownership value. User-management responses never expose passwords, password hashes, token hashes, API key values, or API key hashes.
+
+### Code-managed database objects
+
+The 3.19 objects are included in the normal safe startup schema/index path:
+
+```text
+user_registration_requests
+auth_admin_events
+```
+
+Relevant indexes are also managed by `backend/sql/indexes.sql` and registered in `database_seeder.py`. The user should not run manual `CREATE TABLE`, `ALTER TABLE`, or `CREATE INDEX` statements for 3.19.
+
+### Frontend CORS
+
+Local Vite development is allowed by environment-aware CORS settings. The default local origins remain:
+
+```text
+http://localhost:5173
+http://127.0.0.1:5173
+```
+
+The method list includes the write methods needed by the authenticated React workspace.
+
+### Demo flow helper
+
+`backend/scripts/demo_api.py --print-only` now lists the controlled signup, admin registration-review, admin user-management, provider submission, admin review, public data, and API-key export boundaries in one presentation-friendly flow.
