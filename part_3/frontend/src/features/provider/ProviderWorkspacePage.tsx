@@ -9,6 +9,8 @@ import { SearchableTextSelect } from "@/components/shared/SearchableTextSelect";
 import { getApplications, getStatsByEducationArea, getStatsByRegion, getStatsByYear } from "@/services/api";
 
 const currentYear = new Date().getFullYear();
+const optionSamplePageSize = 100;
+const optionSamplePageLimit = 8;
 
 const blankSubmission: ProviderSubmissionInput = {
   target_year: currentYear,
@@ -146,6 +148,7 @@ export function ProviderWorkspacePage() {
   const [formMessage, setFormMessage] = useState<string | null>(null);
   const [formErrorMessage, setFormErrorMessage] = useState<string | null>(null);
   const [draftOptions, setDraftOptions] = useState<ProviderDraftOptions>(emptyDraftOptions);
+  const [optionsStatus, setOptionsStatus] = useState<"loading" | "ready" | "partial">("loading");
 
   async function load() {
     setStatus("loading");
@@ -168,7 +171,7 @@ export function ProviderWorkspacePage() {
       try {
         const [yearStats, firstPage, regions, educationAreas] = await Promise.all([
           getStatsByYear(),
-          getApplications({ limit: 100, offset: 0 }),
+          getApplications({ limit: optionSamplePageSize, offset: 0 }),
           getStatsByRegion(),
           getStatsByEducationArea(),
         ]);
@@ -194,32 +197,40 @@ export function ProviderWorkspacePage() {
           });
         };
 
+        const publishOptions = () => {
+          setDraftOptions({
+            years: Array.from(yearSet).sort((left, right) => Number(right) - Number(left)),
+            educationNames: Array.from(educationNameSet).sort((left, right) => left.localeCompare(right, "sv-SE")),
+            educationAreas: Array.from(educationSet).sort((left, right) => left.localeCompare(right, "sv-SE")),
+            municipalities: Array.from(municipalitySet).sort((left, right) => left.localeCompare(right, "sv-SE")),
+            regions: Array.from(regionSet).sort((left, right) => left.localeCompare(right, "sv-SE")),
+            studyForms: Array.from(studyFormSet).sort((left, right) => left.localeCompare(right, "sv-SE")),
+            providerTypes: Array.from(providerTypeSet).sort((left, right) => left.localeCompare(right, "sv-SE")),
+          });
+        };
+
         yearStats.forEach((year) => addOption(yearSet, String(year.source_year)));
         regions.forEach((region) => addOption(regionSet, region.lan));
         educationAreas.forEach((area) => addOption(educationSet, area.utbildningsomrade));
         collectFromPage(firstPage);
+        publishOptions();
+        setOptionsStatus("partial");
 
-        const pageSize = Math.max(firstPage.limit || 100, 1);
-        const offsets = Array.from(
-          { length: Math.max(0, Math.ceil(firstPage.total / pageSize) - 1) },
-          (_, index) => (index + 1) * pageSize,
-        );
-        const remainingPages = await Promise.all(offsets.map((offset) => getApplications({ limit: pageSize, offset }).catch(() => null)));
-        if (!isActive) return;
-        remainingPages.forEach((page) => {
+        const pageSize = Math.max(firstPage.limit || optionSamplePageSize, 1);
+        const availablePages = Math.max(0, Math.ceil(firstPage.total / pageSize) - 1);
+        const pagesToSample = Math.min(availablePages, optionSamplePageLimit - 1);
+
+        for (let pageIndex = 1; pageIndex <= pagesToSample; pageIndex += 1) {
+          const page = await getApplications({ limit: pageSize, offset: pageIndex * pageSize }).catch(() => null);
+          if (!isActive) return;
           if (page) collectFromPage(page);
-        });
+          publishOptions();
+          await new Promise((resolve) => window.setTimeout(resolve, 0));
+        }
 
-        setDraftOptions({
-          years: Array.from(yearSet).sort((left, right) => Number(right) - Number(left)),
-          educationNames: Array.from(educationNameSet).sort((left, right) => left.localeCompare(right, "sv-SE")),
-          educationAreas: Array.from(educationSet).sort((left, right) => left.localeCompare(right, "sv-SE")),
-          municipalities: Array.from(municipalitySet).sort((left, right) => left.localeCompare(right, "sv-SE")),
-          regions: Array.from(regionSet).sort((left, right) => left.localeCompare(right, "sv-SE")),
-          studyForms: Array.from(studyFormSet).sort((left, right) => left.localeCompare(right, "sv-SE")),
-          providerTypes: Array.from(providerTypeSet).sort((left, right) => left.localeCompare(right, "sv-SE")),
-        });
+        if (isActive) setOptionsStatus("ready");
       } catch {
+        if (isActive) setOptionsStatus("partial");
         // Guided choices are helpful but not required for the form to work.
       }
     }
@@ -247,7 +258,14 @@ export function ProviderWorkspacePage() {
 
   function startNewDraft() {
     setSelected(null);
-    setForm(blankSubmission);
+    setForm({ ...blankSubmission });
+    setFormErrors({});
+    setFormMessage(null);
+    setFormErrorMessage(null);
+  }
+
+  function resetForm() {
+    setForm(selected ? toForm(selected) : { ...blankSubmission });
     setFormErrors({});
     setFormMessage(null);
     setFormErrorMessage(null);
@@ -318,6 +336,7 @@ export function ProviderWorkspacePage() {
           <div className="hero-chip-row">
             <span className="status-pill ok">Signed in as {user?.display_name || user?.username}</span>
             <span className="status-pill neutral">Provider workspace</span>
+            <span className="status-pill neutral">Guided choices {optionsStatus === "loading" ? "loading" : "ready"}</span>
           </div>
         </div>
         <div className="mini-metric-grid provider-metrics">
@@ -395,7 +414,11 @@ export function ProviderWorkspacePage() {
               value={form.target_year === undefined || form.target_year === null ? "" : String(form.target_year)}
               options={draftOptions.years}
               placeholder="Search target year"
-              onChange={(value) => updateField("target_year", value === "" ? currentYear : Number(value))}
+              onChange={(value) => {
+                const numericYear = Number(value);
+                updateField("target_year", value === "" || !Number.isFinite(numericYear) ? null : numericYear);
+              }}
+              emptyLabel="Clear target year"
               disabled={!editable}
               errorText={formErrors.target_year}
             />
@@ -459,6 +482,7 @@ export function ProviderWorkspacePage() {
             </label>
             <div className="actions action-cluster spacious-actions provider-form-actions">
               {editable && <button className="button primary" type="submit">{selected ? "Save draft changes" : "Create draft"}</button>}
+              {editable && <button className="button secondary" type="button" onClick={resetForm}>Reset form</button>}
               {selected && editable && <ConfirmButton className="button primary" confirmText="Submit this record for admin review?" onConfirm={submitCurrent}>{selected.status === "needs_changes" ? "Resubmit for review" : "Submit for review"}</ConfirmButton>}
               {selected && <button className="button secondary" type="button" onClick={startNewDraft}>Start new draft</button>}
             </div>

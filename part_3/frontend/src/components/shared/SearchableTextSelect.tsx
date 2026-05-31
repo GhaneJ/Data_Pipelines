@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 interface SearchableTextSelectProps {
   label: string;
@@ -30,7 +30,8 @@ export function SearchableTextSelect({
   onChange,
 }: SearchableTextSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const rootRef = useRef<HTMLLabelElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const inputId = useId();
 
   useEffect(() => {
     function closeOnOutsidePointer(event: PointerEvent) {
@@ -38,8 +39,8 @@ export function SearchableTextSelect({
       setIsOpen(false);
     }
 
-    document.addEventListener("pointerdown", closeOnOutsidePointer);
-    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("pointerdown", closeOnOutsidePointer, true);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
   }, []);
 
   const filteredOptions = useMemo(() => {
@@ -51,11 +52,17 @@ export function SearchableTextSelect({
     return [...startsWith, ...includes].slice(0, 30);
   }, [options, value]);
 
+  function chooseOption(nextValue: string) {
+    onChange(nextValue);
+    setIsOpen(false);
+  }
+
   return (
-    <label ref={rootRef} className={["field smart-select", className, isOpen ? "is-open" : ""].filter(Boolean).join(" ")}>
-      <span>{label}</span>
+    <div ref={rootRef} className={["field smart-select", className, isOpen ? "is-open" : ""].filter(Boolean).join(" ")}>
+      <label htmlFor={inputId}>{label}</label>
       <div className="smart-select-control">
         <input
+          id={inputId}
           value={value}
           autoComplete="off"
           placeholder={placeholder}
@@ -72,16 +79,17 @@ export function SearchableTextSelect({
               setIsOpen(false);
               event.currentTarget.blur();
             }
+            if (event.key === "ArrowDown" && !disabled) {
+              event.preventDefault();
+              setIsOpen(true);
+            }
           }}
         />
         {value && !disabled && (
           <button
             type="button"
             className="smart-select-clear"
-            onClick={() => {
-              onChange("");
-              setIsOpen(false);
-            }}
+            onClick={() => chooseOption("")}
             aria-label={`Clear ${label}`}
           >
             Clear
@@ -92,21 +100,19 @@ export function SearchableTextSelect({
       {errorText && <small className="field-error">{errorText}</small>}
       {isOpen && !disabled && (
         <div className="smart-select-options" role="listbox" aria-label={`${label} options`}>
-          <button type="button" className="smart-select-option muted-option" onClick={() => { onChange(""); setIsOpen(false); }}>
+          <button type="button" className="smart-select-option muted-option" onMouseDown={(event) => event.preventDefault()} onClick={() => chooseOption("")}>
             {emptyLabel}
           </button>
           {filteredOptions.length === 0 ? (
-            <div className="smart-select-option muted-option">No matching option found. You can still type a value and apply filters.</div>
+            <div className="smart-select-option muted-option">No matching option found. You can still type a value.</div>
           ) : (
             filteredOptions.map((option) => (
               <button
                 key={option}
                 type="button"
                 className="smart-select-option"
-                onClick={() => {
-                  onChange(option);
-                  setIsOpen(false);
-                }}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => chooseOption(option)}
               >
                 {option}
               </button>
@@ -114,6 +120,6 @@ export function SearchableTextSelect({
           )}
         </div>
       )}
-    </label>
+    </div>
   );
 }
