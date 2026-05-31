@@ -70,7 +70,7 @@ export function DataExplorerPage() {
           <p className="eyebrow">Public data explorer</p>
           <h2>MYH applications intelligence</h2>
           <p>
-            A polished read-only dashboard for the curated historical dataset. It stays public, while provider-created submissions remain isolated in the authenticated workflow.
+            A read-only intelligence view for official MYH application history, with clean filters, compact trends, and live API/database status for the demo.
           </p>
           <div className="hero-actions">
             <a className="button primary" href="#applications-browser-title">Browse applications</a>
@@ -99,9 +99,9 @@ export function DataExplorerPage() {
         <div className="section-heading">
           <div>
             <p className="eyebrow">Executive overview</p>
-            <h2 id="summary-title">Curated application story</h2>
+            <h2 id="summary-title">Applications intelligence</h2>
           </div>
-          <p className="muted">Historical MYH data is read from public backend aggregation endpoints and presented as a clean demo-ready dashboard.</p>
+          <p className="muted">Official historical applications are summarized separately from provider workflow drafts and reviews.</p>
         </div>
         <StateMessage
           status={metrics.status}

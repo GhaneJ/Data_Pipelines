@@ -38,22 +38,42 @@ const application: ApplicationRecord = {
   beviljade_platser_totalt: null,
 };
 
-const jsonResponse = (payload: unknown) => Promise.resolve(new Response(JSON.stringify(payload), { status: 200 }));
+const jsonResponse = (payload: unknown) => Promise.resolve(new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+function mockApplicationsFetch(items: ApplicationRecord[], total = items.length) {
+  return vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+    const url = String(input);
+    if (url.includes("/applications/MYH%202024%2F1")) {
+      return jsonResponse(application);
+    }
+    if (url.includes("/stats/by-year")) {
+      return jsonResponse([
+        { source_year: 2025, total_applications: 20, approved_applications: 10, rejected_applications: 10, withdrawn_applications: 0, approval_rate_percent: 50 },
+        { source_year: 2024, total_applications: 20, approved_applications: 10, rejected_applications: 10, withdrawn_applications: 0, approval_rate_percent: 50 },
+      ]);
+    }
+    if (url.includes("/stats/by-region")) {
+      return jsonResponse([{ lan: "Stockholm", total_applications: 50, approved_applications: 25, rejected_applications: 25, withdrawn_applications: 0, approval_rate_percent: 50 }]);
+    }
+    if (url.includes("/stats/by-education-area")) {
+      return jsonResponse([{ education_area_id: 1, utbildningsomrade: "Data/IT", total_applications: 30, approved_applications: 15, rejected_applications: 15, withdrawn_applications: 0, approval_rate_percent: 50 }]);
+    }
+    if (url.includes("/providers")) {
+      return jsonResponse({ items: [{ provider_id: "999", utbildningsanordnare: "Example Provider", total_applications: 10, approved_applications: 5, first_year: 2020, last_year: 2025 }], total: 1, limit: 50, offset: 0 });
+    }
+
+    const offset = new URL(url).searchParams.get("offset") ?? "0";
+    return jsonResponse({ total, limit: 25, offset: Number(offset), items });
+  });
+}
 
 beforeEach(() => {
   vi.restoreAllMocks();
 });
 
 test("renders applications, applies filters, paginates, and loads a detail view", async () => {
-  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
-    const url = String(input);
-    if (url.includes("/applications/MYH%202024%2F1")) {
-      return jsonResponse(application);
-    }
-
-    const offset = new URL(url).searchParams.get("offset") ?? "0";
-    return jsonResponse({ total: 40, limit: 25, offset: Number(offset), items: [application] });
-  });
+  const fetchMock = mockApplicationsFetch([application], 40);
+  const user = userEvent.setup();
 
   render(<ApplicationsBrowser />);
 
@@ -61,20 +81,20 @@ test("renders applications, applies filters, paginates, and loads a detail view"
   await waitFor(() => expect(screen.getAllByText("Example Provider").length).toBeGreaterThan(0));
   expect(screen.getByText(/Showing 1–1 of 40/i)).toBeInTheDocument();
 
-  await userEvent.selectOptions(screen.getByLabelText(/Year/i), "2024");
-  await userEvent.selectOptions(screen.getByLabelText(/Decision/i), "approved");
-  await userEvent.click(screen.getByRole("button", { name: /Apply filters/i }));
+  await user.type(screen.getByLabelText(/Year/i), "2024");
+  await user.type(screen.getByLabelText(/Decision/i), "approved");
+  await user.click(screen.getByRole("button", { name: /Apply filters/i }));
 
   await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("source_year=2024"), expect.any(Object)));
   expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("decision=approved"), expect.any(Object));
 
-  await userEvent.click(screen.getByRole("button", { name: /Next/i }));
+  await user.click(screen.getByRole("button", { name: /Next/i }));
 
   await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("offset=25"), expect.any(Object)));
 });
 
 test("renders empty application state", async () => {
-  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ total: 0, limit: 25, offset: 0, items: [] }), { status: 200 }));
+  mockApplicationsFetch([], 0);
 
   render(<ApplicationsBrowser />);
 

@@ -44,7 +44,7 @@ test("public data explorer keeps the original dashboard available", async () => 
 
   expect(screen.getByRole("heading", { name: /MYH applications intelligence/i })).toBeInTheDocument();
   await waitFor(() => expect(screen.getByText((text) => text.replace(/\s/g, "") === "7641")).toBeInTheDocument());
-  await waitFor(() => expect(screen.getByText(/Curated application story/i)).toBeInTheDocument());
+  await waitFor(() => expect(screen.getAllByText(/Applications intelligence/i).length).toBeGreaterThan(0));
   await waitFor(() => expect(screen.getAllByText("Data Engineer").length).toBeGreaterThan(0));
 });
 
@@ -60,6 +60,9 @@ test("admin login routes to the admin workspace", async () => {
     if (url.includes("/admin/users")) return jsonResponse({ items: [{ id: "u1", username: "admin", display_name: "Local Admin", role: "admin", provider_id: null, is_active: true, failed_login_count: 0, locked_until: null, last_login_at: null, password_changed_at: "2030-01-01T00:00:00Z", created_at: "2030-01-01T00:00:00Z", updated_at: "2030-01-01T00:00:00Z" }], limit: 100, offset: 0 });
     if (url.includes("/admin/registration-requests")) return jsonResponse({ items: [], limit: 100, offset: 0 });
     if (url.includes("/admin/provider-submissions")) return jsonResponse({ items: [], limit: 100, offset: 0 });
+    if (url.includes("/admin/api-keys")) return jsonResponse([]);
+    if (url.includes("/health/db")) return jsonResponse({ status: "ready", database_connected: true, required_tables: { ok: true, checked: ["applications"], missing: [] }, applications: { table: "applications", ok: true, row_count: 7641 }, lookup_tables: [] });
+    if (url.includes("/health")) return jsonResponse({ status: "ok" });
     return jsonResponse({});
   });
   const user = userEvent.setup();
@@ -67,8 +70,8 @@ test("admin login routes to the admin workspace", async () => {
 
   await user.click(screen.getAllByRole("button", { name: /^Log in$/i }).at(-1)!);
 
-  await waitFor(() => expect(screen.getByRole("heading", { name: /Admin dashboard/i })).toBeInTheDocument());
-  expect(screen.getByText(/controlled signup, users, machine API access/i)).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole("heading", { name: /Operational control room/i })).toBeInTheDocument());
+  expect(screen.getByText(/identity, access requests, provider reviews/i)).toBeInTheDocument();
 });
 
 test("signup submits a pending provider access request and does not create a session", async () => {

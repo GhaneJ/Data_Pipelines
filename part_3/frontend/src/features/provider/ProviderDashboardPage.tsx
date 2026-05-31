@@ -30,7 +30,7 @@ export function ProviderDashboardPage({ onNavigate }: { onNavigate: (path: strin
 
   return (
     <div className="page-stack">
-      <section className="hero compact"><p className="eyebrow">Provider workspace</p><h2>Welcome, {user?.display_name}</h2><p>Your provider account is approved and tied to provider ID {user?.provider_id}. The backend owns all provider data boundaries.</p></section>
+      <section className="hero compact"><p className="eyebrow">Provider workspace</p><h2>Welcome, {user?.display_name}</h2><p>Your approved provider account can manage only its own submissions. The backend owns all provider data boundaries.</p></section>
       {status === "loading" && <LoadingState text="Loading provider workspace..." />}
       {error !== null && <ErrorPanel error={error} />}
       {status === "success" && <section className="summary-grid"><button className="summary-tile" onClick={() => onNavigate("/provider/submissions")}><span>Total submissions</span><strong>{cards.total}</strong><small>owned by your provider</small></button><button className="summary-tile" onClick={() => onNavigate("/provider/submissions")}><span>Editable drafts</span><strong>{cards.draft}</strong><small>drafts can be changed</small></button><button className="summary-tile" onClick={() => onNavigate("/provider/submissions")}><span>Needs changes</span><strong>{cards.needsChanges}</strong><small>admin feedback available</small></button><button className="summary-tile" onClick={() => onNavigate("/provider/submissions")}><span>Final decisions</span><strong>{cards.final}</strong><small>approved/rejected are locked</small></button></section>}

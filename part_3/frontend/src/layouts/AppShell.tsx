@@ -3,19 +3,26 @@ import { useAuth } from "@/auth/AuthContext";
 export interface NavTarget {
   path: string;
   label: string;
+  eyebrow?: string;
   roles?: string[];
 }
 
 const NAV_TARGETS: NavTarget[] = [
-  { path: "/data", label: "Public data" },
-  { path: "/admin", label: "Admin dashboard", roles: ["admin"] },
-  { path: "/admin/users", label: "Users", roles: ["admin"] },
-  { path: "/admin/signup-requests", label: "Signup requests", roles: ["admin"] },
-  { path: "/admin/provider-submissions", label: "Review queue", roles: ["admin"] },
-  { path: "/admin/api-access", label: "API access", roles: ["admin"] },
-  { path: "/provider", label: "Provider workspace", roles: ["provider"] },
-  { path: "/provider/submissions", label: "My submissions", roles: ["provider"] },
+  { path: "/data", label: "Public data", eyebrow: "Explore" },
+  { path: "/admin", label: "Dashboard", eyebrow: "Admin", roles: ["admin"] },
+  { path: "/admin/users", label: "Users", eyebrow: "Access", roles: ["admin"] },
+  { path: "/admin/signup-requests", label: "Access requests", eyebrow: "Approval", roles: ["admin"] },
+  { path: "/admin/provider-submissions", label: "Review queue", eyebrow: "Workflow", roles: ["admin"] },
+  { path: "/admin/api-access", label: "Machine access", eyebrow: "API", roles: ["admin"] },
+  { path: "/provider", label: "Workspace", eyebrow: "Provider", roles: ["provider"] },
+  { path: "/provider/submissions", label: "My submissions", eyebrow: "Register", roles: ["provider"] },
 ];
+
+function roleLabel(role: string | undefined) {
+  if (role === "admin") return "Administrator";
+  if (role === "provider") return "Provider";
+  return "Public visitor";
+}
 
 export function AppShell({ currentPath, onNavigate, children }: { currentPath: string; onNavigate: (path: string) => void; children: React.ReactNode }) {
   const { user, logout } = useAuth();
@@ -24,13 +31,13 @@ export function AppShell({ currentPath, onNavigate, children }: { currentPath: s
   return (
     <div className="portal-shell">
       <aside className="sidebar">
-        <div className="brand-card">
+        <button className="brand-card" type="button" onClick={() => onNavigate(user?.role === "admin" ? "/admin" : user?.role === "provider" ? "/provider" : "/data")}>
           <span className="brand-mark">MYH</span>
           <div>
             <strong>Applications Portal</strong>
-            <span>Part 3 authenticated workspace</span>
+            <span>Data service workspace</span>
           </div>
-        </div>
+        </button>
         <nav aria-label="Workspace navigation">
           {targets.map((target) => (
             <button
@@ -39,7 +46,8 @@ export function AppShell({ currentPath, onNavigate, children }: { currentPath: s
               className={currentPath === target.path || currentPath.startsWith(`${target.path}/`) ? "nav-link active" : "nav-link"}
               onClick={() => onNavigate(target.path)}
             >
-              {target.label}
+              {target.eyebrow && <small>{target.eyebrow}</small>}
+              <span>{target.label}</span>
             </button>
           ))}
         </nav>
@@ -48,20 +56,25 @@ export function AppShell({ currentPath, onNavigate, children }: { currentPath: s
         <header className="topbar">
           <div>
             <p className="eyebrow">Data Pipeline Project — Part 3</p>
-            <h1>Authenticated React Workspace</h1>
+            <h1>MYH Applications Portal</h1>
           </div>
           <div className="user-card">
             {user ? (
               <>
-                <span>{user.display_name}</span>
-                <strong>{user.role}{user.provider_id ? ` · provider ${user.provider_id}` : ""}</strong>
+                <div className="user-card-copy">
+                  <strong>{user.display_name || user.username}</strong>
+                  <span>{user.username} · {roleLabel(user.role)}</span>
+                </div>
                 <button type="button" className="button ghost" onClick={() => void logout().then(() => onNavigate("/login"))}>
                   Log out
                 </button>
               </>
             ) : (
               <>
-                <span>Public visitor</span>
+                <div className="user-card-copy">
+                  <strong>Public visitor</strong>
+                  <span>Read-only explorer</span>
+                </div>
                 <button type="button" className="button ghost" onClick={() => onNavigate("/login")}>
                   Log in
                 </button>

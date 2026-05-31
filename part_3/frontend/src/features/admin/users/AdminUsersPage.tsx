@@ -42,10 +42,8 @@ export function AdminUsersPage() {
   const [status, setStatus] = useState("loading");
   const [error, setError] = useState<unknown>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [passwordFocused, setPasswordFocused] = useState(false);
   const requiresPassword = formMode === "create" || formMode === "reset";
   const passwordPolicy = getPasswordPolicy(form.password);
-  const showPasswordPolicy = requiresPassword && (passwordFocused || form.password.length > 0);
 
   async function load() {
     setStatus("loading");
@@ -75,7 +73,6 @@ export function AdminUsersPage() {
     setForm(blankForm);
     setFormMode("create");
     setSelectedUser(null);
-    setPasswordFocused(false);
     setError(null);
   }
 
@@ -249,22 +246,20 @@ export function AdminUsersPage() {
               </select>
             </label>
             {requiresPassword && (
-              <label className="field password-field">{formMode === "reset" ? "New password" : "Password"}
+              <label className="field">{formMode === "reset" ? "New password" : "Password"}
                 <input
                   type="password"
                   value={form.password}
                   required
                   minLength={10}
-                  onFocus={() => setPasswordFocused(true)}
-                  onBlur={() => setPasswordFocused(false)}
                   onChange={(event) => setForm({ ...form, password: event.target.value })}
                 />
-                {showPasswordPolicy && (
-                  <div className="password-policy inline-password-policy" aria-live="polite">
-                    {passwordPolicy.checks.map((check) => <span key={check.label} className={check.passed ? "passed" : ""}>{check.passed ? "✓" : "○"} {check.label}</span>)}
-                  </div>
-                )}
               </label>
+            )}
+            {requiresPassword && (
+              <div className="password-policy">
+                {passwordPolicy.checks.map((check) => <span key={check.label} className={check.passed ? "passed" : ""}>{check.passed ? "✓" : "○"} {check.label}</span>)}
+              </div>
             )}
             {form.role === "provider" && formMode !== "reset" && (
               <ProviderSearchSelect
