@@ -118,7 +118,7 @@ The public signup/request-access page calls:
 POST /auth/registration-requests
 ```
 
-This creates a pending provider access request only. It does not create an active login session and it does not allow public admin signup.
+This creates a pending provider access request only. It does not create an active login session and it does not allow public admin signup. The provider is chosen through a searchable provider-name picker backed by the existing public `/providers?q=...` endpoint, so users do not need to type raw provider IDs.
 
 Admin users review those requests through:
 
@@ -134,7 +134,7 @@ Admin users can:
 
 - view summary cards for users, pending signup requests, and provider review work,
 - manage users,
-- create admin/provider users,
+- create admin/provider users with searchable provider-name selection for provider ownership,
 - update safe user metadata,
 - deactivate/reactivate users,
 - reset passwords,
@@ -162,7 +162,7 @@ The frontend hides blocked actions by workflow state, while the backend remains 
 
 ## Public/shared data explorer
 
-The `/data` area keeps the original dashboard behavior and consumes public backend endpoints such as:
+The `/data` area keeps the original dashboard behavior, but presents it as a polished public intelligence dashboard with a stronger hero section, KPI ribbon, chart grid, and filterable application browser. It consumes public backend endpoints such as:
 
 ```text
 GET /health

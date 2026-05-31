@@ -30,8 +30,8 @@ beforeEach(() => {
 test("renders login shell and controlled signup entry without using API keys", async () => {
   render(<App />);
 
-  await waitFor(() => expect(screen.getByRole("heading", { name: /Log in to the workspace/i })).toBeInTheDocument());
-  expect(screen.getByText(/database-issued bearer session tokens from 3.15.1/i)).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole("heading", { name: /Sign in to the MYH portal/i })).toBeInTheDocument());
+  expect(screen.getByText(/database-issued human session token/i)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /Request provider access/i })).toBeInTheDocument();
 });
 
@@ -42,8 +42,8 @@ test("public data explorer keeps the original dashboard available", async () => 
 
   await user.click(screen.getByRole("button", { name: /Open public data explorer/i }));
 
-  expect(screen.getByRole("heading", { name: /MYH Applications Dashboard/i })).toBeInTheDocument();
-  await waitFor(() => expect(screen.getByText(/7,641 application rows/i)).toBeInTheDocument());
+  expect(screen.getByRole("heading", { name: /MYH applications intelligence/i })).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByText((text) => text.replace(/\s/g, "") === "7641")).toBeInTheDocument());
   await waitFor(() => expect(screen.getByText(/Curated application story/i)).toBeInTheDocument());
   await waitFor(() => expect(screen.getAllByText("Data Engineer").length).toBeGreaterThan(0));
 });
@@ -74,7 +74,8 @@ test("admin login routes to the admin workspace", async () => {
 test("signup submits a pending provider access request and does not create a session", async () => {
   const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = String(input);
-    if (url.includes("/auth/registration-requests")) return jsonResponse({ id: "r1", requested_username: "new-provider", display_name: "New Provider", email: null, provider_id: "999999", requested_role: "provider", organization_name: null, message: "Please approve", status: "pending", created_at: "2030-01-01T00:00:00Z", reviewed_by_user_id: null, reviewed_at: null, review_notes: null, created_user_id: null }, 201);
+    if (url.includes("/providers")) return jsonResponse({ items: [{ provider_id: "999999", utbildningsanordnare: "Example Provider", total_applications: 25, approved_applications: 12, first_year: 2020, last_year: 2025 }], limit: 10, offset: 0 });
+    if (url.includes("/auth/registration-requests")) return jsonResponse({ id: "r1", requested_username: "new-provider", display_name: "New Provider", email: null, provider_id: "999999", requested_role: "provider", organization_name: "Example Provider", message: "Please approve", status: "pending", created_at: "2030-01-01T00:00:00Z", reviewed_by_user_id: null, reviewed_at: null, review_notes: null, created_user_id: null }, 201);
     return jsonResponse({});
   });
   const user = userEvent.setup();
@@ -84,11 +85,13 @@ test("signup submits a pending provider access request and does not create a ses
   await user.type(screen.getByLabelText(/Username/i), "new-provider");
   await user.type(screen.getByLabelText(/Display name/i), "New Provider");
   await user.type(screen.getByLabelText(/^Password/i), "new-provider-password");
-  await user.type(screen.getByLabelText(/Provider ID/i), "999999");
+  await user.type(screen.getByLabelText(/Provider organization search/i), "Example");
+  await waitFor(() => expect(screen.getByRole("button", { name: /Example Provider/i })).toBeInTheDocument());
+  await user.click(screen.getByRole("button", { name: /Example Provider/i }));
   await user.type(screen.getByLabelText(/Reason/i), "Please approve");
-  await user.click(screen.getByRole("button", { name: /Submit access request/i }));
+  await user.click(screen.getByRole("button", { name: /Submit access request for admin review/i }));
 
-  await waitFor(() => expect(screen.getByText(/Provider access request is pending/i)).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByRole("heading", { name: /Admin approval is required/i })).toBeInTheDocument());
   expect(sessionStorage.getItem("part3.sessionToken")).toBeNull();
   expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining("/auth/registration-requests"), expect.objectContaining({ method: "POST" }));
 });

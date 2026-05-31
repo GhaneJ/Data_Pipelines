@@ -1,14 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { API_BASE_URL, getDatabaseHealth, getHealth } from "@/services/api";
 import type { ApiStatus, DatabaseHealth, HealthStatus } from "@/services/api";
 import { ApplicationsBrowser } from "@/components/ApplicationsBrowser";
-import { BackendStatusPanel } from "@/components/BackendStatusPanel";
 import { CategoryBars } from "@/components/CategoryBars";
 import { DecisionTrendChart } from "@/components/DecisionTrendChart";
 import { StateMessage } from "@/components/StateMessage";
 import { SummaryCards } from "@/components/SummaryCards";
 import { YearTrendChart } from "@/components/YearTrendChart";
 import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
+
+function statusText(status: ApiStatus): string {
+  if (status === "loading") return "Checking";
+  if (status === "success") return "Online";
+  if (status === "error") return "Needs attention";
+  return "Waiting";
+}
 
 export function DataExplorerPage() {
   const [healthStatus, setHealthStatus] = useState<ApiStatus>("idle");
@@ -45,30 +51,57 @@ export function DataExplorerPage() {
     };
   }, []);
 
+  const dataStory = useMemo(() => {
+    const yearCount = metrics.yearStats.length;
+    const firstYear = metrics.yearStats[0]?.source_year;
+    const lastYear = metrics.yearStats.at(-1)?.source_year;
+    return {
+      rowCount: databaseHealth?.applications?.row_count ?? null,
+      yearRange: firstYear && lastYear ? `${firstYear}-${lastYear}` : yearCount > 0 ? `${yearCount} years` : "Waiting for data",
+      apiStatus: health?.status ?? statusText(healthStatus),
+      dbStatus: statusText(dbStatus),
+    };
+  }, [databaseHealth, dbStatus, health, healthStatus, metrics.yearStats]);
+
   return (
-    <div className="page-stack">
-      <section className="hero compact">
-        <div>
+    <div className="page-stack data-explorer">
+      <section className="data-hero">
+        <div className="data-hero-copy">
           <p className="eyebrow">Public data explorer</p>
-          <h2>MYH Applications Dashboard</h2>
-          <p>Public read/statistics endpoints remain open and separate from provider-created workflow submissions.</p>
+          <h2>MYH applications intelligence</h2>
+          <p>
+            A polished read-only dashboard for the curated historical dataset. It stays public, while provider-created submissions remain isolated in the authenticated workflow.
+          </p>
+          <div className="hero-actions">
+            <a className="button primary" href="#applications-browser-title">Browse applications</a>
+            <a className="button secondary" href={`${API_BASE_URL}/docs`} target="_blank" rel="noreferrer">Open API docs</a>
+          </div>
+        </div>
+        <div className="data-health-card" aria-label="Backend status summary">
+          <span>Connected API</span>
+          <strong>{API_BASE_URL}</strong>
+          <div className="health-grid">
+            <article className={`health-tile health-${healthStatus}`}><span>API</span><strong>{dataStory.apiStatus}</strong></article>
+            <article className={`health-tile health-${dbStatus}`}><span>Database</span><strong>{dataStory.dbStatus}</strong></article>
+          </div>
+          {errorMessage && <p className="callout warning" role="alert">{errorMessage}</p>}
         </div>
       </section>
-      <BackendStatusPanel
-        apiBaseUrl={API_BASE_URL}
-        healthStatus={healthStatus}
-        dbStatus={dbStatus}
-        health={health}
-        databaseHealth={databaseHealth}
-        errorMessage={errorMessage}
-      />
-      <section className="dashboard-section" aria-labelledby="summary-title">
+
+      <section className="kpi-ribbon" aria-label="Data explorer key facts">
+        <article><span>Application rows</span><strong>{dataStory.rowCount !== null ? dataStory.rowCount.toLocaleString("sv-SE") : "—"}</strong><small>from PostgreSQL</small></article>
+        <article><span>Source years</span><strong>{dataStory.yearRange}</strong><small>MYH Tabell 3 backbone</small></article>
+        <article><span>Access model</span><strong>Public read</strong><small>no browser API key</small></article>
+        <article><span>Workflow data</span><strong>Separated</strong><small>submissions are not official history</small></article>
+      </section>
+
+      <section className="dashboard-section data-story-panel" aria-labelledby="summary-title">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Overview</p>
+            <p className="eyebrow">Executive overview</p>
             <h2 id="summary-title">Curated application story</h2>
           </div>
-          <p className="muted">Historical MYH data is read from public backend aggregation endpoints.</p>
+          <p className="muted">Historical MYH data is read from public backend aggregation endpoints and presented as a clean demo-ready dashboard.</p>
         </div>
         <StateMessage
           status={metrics.status}
@@ -79,7 +112,7 @@ export function DataExplorerPage() {
         {metrics.status === "success" && metrics.yearStats.length > 0 && (
           <>
             <SummaryCards yearStats={metrics.yearStats} decisionStats={metrics.decisionStats} />
-            <section className="chart-grid" aria-label="Trend charts">
+            <section className="chart-grid premium-chart-grid" aria-label="Trend charts">
               <YearTrendChart data={metrics.yearStats} />
               <DecisionTrendChart data={metrics.decisionTrend} />
             </section>
@@ -87,6 +120,7 @@ export function DataExplorerPage() {
           </>
         )}
       </section>
+
       <ApplicationsBrowser />
     </div>
   );

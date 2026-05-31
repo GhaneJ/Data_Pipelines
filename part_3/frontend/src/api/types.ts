@@ -43,6 +43,16 @@ export interface RegistrationRequest {
   created_user_id: string | null;
 }
 
+
+export interface ProviderSummary {
+  provider_id: string | number;
+  utbildningsanordnare: string;
+  total_applications: number;
+  approved_applications: number;
+  first_year: number | null;
+  last_year: number | null;
+}
+
 export interface Paginated<T> {
   items: T[];
   limit: number;
