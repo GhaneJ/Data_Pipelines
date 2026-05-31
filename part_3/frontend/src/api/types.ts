@@ -162,3 +162,96 @@ export interface ApiKeyMetadata {
 export interface ApiKeyCreateResponse extends ApiKeyMetadata {
   api_key: string;
 }
+
+
+export interface SourceMonitorStatus {
+  monitor_enabled: boolean;
+  run_on_startup: boolean;
+  auto_import_enabled: boolean;
+  interval_minutes: number;
+  source_url: string;
+  last_check: Record<string, unknown> | null;
+  known_source_files: number;
+  unread_notifications: number;
+  latest_refresh_run: Record<string, unknown> | null;
+}
+
+export interface SourceCheckResponse {
+  check_run_id: string;
+  status: string;
+  source_url: string;
+  started_at: string;
+  finished_at: string | null;
+  http_status: number | null;
+  discovered_count: number;
+  new_count: number;
+  changed_count: number;
+  known_count: number;
+  message: string;
+  error_message: string | null;
+  files: SourceFile[];
+}
+
+export interface SourceFile {
+  id: string;
+  file_name: string;
+  file_url: string;
+  file_type: string;
+  source_year: number | null;
+  status: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  last_checked_at: string | null;
+  last_downloaded_at: string | null;
+  last_sha256: string | null;
+  downloaded_path: string | null;
+  last_error: string | null;
+}
+
+export type SourceFileList = Paginated<SourceFile>;
+
+export interface SourceFileDownloadResponse {
+  source_file_id: string;
+  file_name: string;
+  downloaded_path: string;
+  sha256: string;
+  size_bytes: number;
+  changed: boolean;
+  message: string;
+}
+
+export interface RefreshRun {
+  id: string;
+  source_file_id: string | null;
+  status: string;
+  mode: string;
+  started_at: string;
+  finished_at: string | null;
+  rows_imported: number | null;
+  affected_years: string | null;
+  source_sha256: string | null;
+  downloaded_path: string | null;
+  processed_path: string | null;
+  validation_summary: string | null;
+  error_message: string | null;
+  triggered_by_user_id: string | null;
+}
+
+export type RefreshRunList = Paginated<RefreshRun>;
+
+export interface AdminNotification {
+  id: string;
+  notification_type: string;
+  severity: "info" | "success" | "warning" | "error";
+  title: string;
+  message: string;
+  status: "unread" | "read" | "resolved";
+  source_file_id: string | null;
+  refresh_run_id: string | null;
+  created_at: string;
+  read_at: string | null;
+  resolved_at: string | null;
+  actor_user_id: string | null;
+}
+
+export type AdminNotificationList = Paginated<AdminNotification>;

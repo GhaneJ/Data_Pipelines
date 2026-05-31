@@ -16,6 +16,7 @@ const NAV_TARGETS: NavTarget[] = [
   { path: "/admin/signup-requests", label: "Access requests", eyebrow: "Approval", roles: ["admin"] },
   { path: "/admin/provider-submissions", label: "Review queue", eyebrow: "Workflow", roles: ["admin"] },
   { path: "/admin/api-access", label: "Machine access", eyebrow: "API", roles: ["admin"] },
+  { path: "/admin/operations", label: "Operations", eyebrow: "Refresh", roles: ["admin"] },
   { path: "/provider", label: "Workspace", eyebrow: "Provider", roles: ["provider"] },
   { path: "/provider/submissions", label: "My submissions", eyebrow: "Register", roles: ["provider"] },
 ];

@@ -44,8 +44,8 @@ test("public data explorer keeps the original dashboard available", async () => 
 
   expect(screen.getByRole("heading", { name: /Historical MYH applications, ready to explore/i })).toBeInTheDocument();
   await waitFor(() => expect(screen.getAllByText((text) => text.replace(/\s/g, "") === "100").length).toBeGreaterThan(0));
-  await waitFor(() => expect(screen.getAllByText(/Historical insights/i).length).toBeGreaterThan(0));
-  await user.click(screen.getByRole("button", { name: /Browse archive/i }));
+  await waitFor(() => expect(screen.getAllByText(/Official application history/i).length).toBeGreaterThan(0));
+  await user.click(screen.getAllByRole("button", { name: /Browse archive/i }).at(0)!);
   await waitFor(() => expect(screen.getByRole("heading", { name: /Applications browser/i })).toBeInTheDocument());
   await waitFor(() => expect(screen.getAllByText("Data Engineer").length).toBeGreaterThan(0));
 });
@@ -74,6 +74,57 @@ test("admin login routes to the admin workspace", async () => {
 
   await waitFor(() => expect(screen.getByRole("heading", { name: /Operational control room/i })).toBeInTheDocument());
   expect(screen.getByText(/identity, access requests, provider reviews/i)).toBeInTheDocument();
+});
+
+
+
+test("admin operations page renders source monitoring actions and confirmation flow", async () => {
+  const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+    const url = String(input);
+    const method = String(init?.method ?? "GET").toUpperCase();
+    const headers = JSON.stringify(init?.headers ?? {});
+    if (url.includes("/auth/login")) return jsonResponse({ access_token: "admin-token", token_type: "bearer", expires_at: "2030-01-01T00:00:00Z" });
+    if (url.includes("/auth/whoami")) {
+      expect(headers).toContain("Bearer admin-token");
+      return jsonResponse({ subject: "user:admin", username: "admin", display_name: "Local Admin", role: "admin", provider_id: null });
+    }
+    if (url.includes("/admin/users")) return jsonResponse({ items: [], limit: 100, offset: 0 });
+    if (url.includes("/admin/registration-requests")) return jsonResponse({ items: [], limit: 100, offset: 0 });
+    if (url.includes("/admin/provider-submissions")) return jsonResponse({ items: [], limit: 100, offset: 0 });
+    if (url.includes("/admin/api-keys")) return jsonResponse([]);
+    if (url.includes("/admin/source-monitor/status")) return jsonResponse({
+      source_url: "https://www.myh.se/yrkeshogskolan/resultat-ansokningsomgangar/resultat-for-program",
+      monitor_enabled: false,
+      interval_minutes: 360,
+      run_on_startup: false,
+      auto_import_enabled: false,
+      known_source_files: 1,
+      unread_notifications: 1,
+      last_check: { status: "success", finished_at: "2030-01-01T00:00:00Z" },
+      latest_refresh_run: null,
+    });
+    if (url.includes("/admin/source-monitor/check") && method === "POST") return jsonResponse({ check_run_id: "check-1", status: "success", discovered_files: 1, new_files: 0, changed_files: 0, known_files: 1, notifications_created: 0, message: "Source check completed." });
+    if (url.endsWith("/admin/source-files") || url.includes("/admin/source-files?")) return jsonResponse({ total: 1, limit: 25, offset: 0, items: [{ id: "file-1", file_name: "resultat-2026.xlsx", file_url: "https://example.test/resultat-2026.xlsx", file_type: "xlsx", source_year: 2026, status: "new", first_seen_at: "2030-01-01T00:00:00Z", last_seen_at: "2030-01-01T00:00:00Z", last_checked_at: "2030-01-01T00:00:00Z", last_downloaded_at: null, last_sha256: null, downloaded_path: null, last_error: null }] });
+    if (url.includes("/admin/source-files/file-1/import") && method === "POST") return jsonResponse({ id: "run-1", source_file_id: "file-1", status: "success", mode: "official_source_import", started_at: "2030-01-01T00:00:00Z", finished_at: "2030-01-01T00:01:00Z", rows_imported: 2, affected_years: "2026", source_path: "runtime/source_files/resultat-2026.xlsx", processed_path: "runtime/processed/resultat-2026.csv", validation_summary: "2 rows imported", error_message: null, request_id: "test-request" });
+    if (url.includes("/admin/notifications")) return jsonResponse({ total: 1, limit: 25, offset: 0, items: [{ id: "note-1", notification_type: "source_file_detected", severity: "info", status: "unread", title: "New MYH source file detected", message: "resultat-2026.xlsx", related_source_file_id: "file-1", related_refresh_run_id: null, created_at: "2030-01-01T00:00:00Z", read_at: null, resolved_at: null }] });
+    if (url.includes("/admin/refresh-runs")) return jsonResponse({ total: 0, limit: 25, offset: 0, items: [] });
+    if (url.includes("/health/db")) return jsonResponse({ status: "ready", database_connected: true, required_tables: { ok: true, checked: ["applications"], missing: [] }, applications: { table: "applications", ok: true, row_count: 7641 }, lookup_tables: [] });
+    if (url.includes("/health")) return jsonResponse({ status: "ok" });
+    return jsonResponse({});
+  });
+  const user = userEvent.setup();
+  render(<App />);
+
+  await user.click(screen.getAllByRole("button", { name: /^Log in$/i }).at(-1)!);
+  await user.click(await screen.findByRole("button", { name: /Operations/i }));
+
+  await waitFor(() => expect(screen.getByRole("heading", { name: /MYH source monitoring and safe refresh pipeline/i })).toBeInTheDocument());
+  await user.click(screen.getByRole("button", { name: /Check MYH now/i }));
+  await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining("/admin/source-monitor/check"), expect.objectContaining({ method: "POST" })));
+  await user.click(screen.getByRole("button", { name: /^Import$/i }));
+  expect(screen.getByRole("dialog", { name: /Import official MYH source file/i })).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: /Import official file/i }));
+  await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining("/admin/source-files/file-1/import"), expect.objectContaining({ method: "POST" })));
 });
 
 test("signup submits a pending provider access request and does not create a session", async () => {

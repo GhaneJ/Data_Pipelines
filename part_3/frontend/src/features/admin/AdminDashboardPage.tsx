@@ -255,6 +255,12 @@ export function AdminDashboardPage({ onNavigate }: { onNavigate: (path: string) 
               <p>Machine clients use scoped API keys for export access. Browser users continue to use personal sessions.</p>
               <button className="button secondary" type="button" onClick={() => onNavigate("/admin/api-access")}>Open machine access</button>
             </article>
+            <article className="panel action-panel">
+              <p className="eyebrow">Source operations</p>
+              <h3>MYH monitoring and refresh</h3>
+              <p>Check the official MYH result page, review detected files, inspect notifications, and import validated official source data.</p>
+              <button className="button secondary" type="button" onClick={() => onNavigate("/admin/operations")}>Open operations</button>
+            </article>
           </section>
         </>
       )}

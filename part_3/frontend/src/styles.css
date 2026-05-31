@@ -2326,3 +2326,125 @@ body {
 .public-open-data-page .public-overview-card {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(246, 250, 253, 0.92));
 }
+
+/* Sub-project 3.20: admin source-monitoring operations workspace. */
+.operations-hero {
+  align-items: stretch;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(0, 124, 137, 0.12), transparent 34%),
+    linear-gradient(135deg, rgba(250, 253, 255, 0.96), rgba(235, 246, 249, 0.96));
+  border: 1px solid #c8d9e6;
+  color: var(--ink);
+}
+
+.operations-summary-grid .static-card {
+  text-align: left;
+  cursor: default;
+}
+
+.operations-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(340px, 0.9fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.operations-panel {
+  border-radius: 24px;
+  border: 1px solid var(--line-soft);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 12px 30px rgba(26, 43, 61, 0.08);
+}
+
+.operations-panel.wide-panel {
+  min-width: 0;
+}
+
+.operations-table-wrap {
+  border: 1px solid #d9e6ee;
+  border-radius: 18px;
+  overflow: auto;
+  background: #fff;
+}
+
+.operations-table td:first-child {
+  min-width: 260px;
+}
+
+.operations-table td small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.table-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #006c78;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.table-link:hover {
+  text-decoration: underline;
+}
+
+.compact-actions {
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.notification-stack,
+.detail-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.notification-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid #d9e6ee;
+  background: #fff;
+}
+
+.notification-card.warning,
+.notification-card.error {
+  border-color: #fed7aa;
+  background: #fffaf5;
+}
+
+.notification-card.success {
+  border-color: #bbf7d0;
+  background: #f4fdf7;
+}
+
+.notification-card h3 {
+  margin: 2px 0 6px;
+}
+
+.notification-card p {
+  margin: 0 0 8px;
+  color: var(--muted);
+}
+
+.notification-actions {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+  align-content: start;
+}
+
+.detail-panel p {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1100px) {
+  .operations-grid {
+    grid-template-columns: 1fr;
+  }
+}

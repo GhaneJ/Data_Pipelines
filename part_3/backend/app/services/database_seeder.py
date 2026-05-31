@@ -46,6 +46,10 @@ PROJECT_MANAGED_TABLES = (
     "provider_submission_review_events",
     "user_registration_requests",
     "auth_admin_events",
+    "myh_source_check_runs",
+    "myh_source_files",
+    "myh_refresh_runs",
+    "admin_notifications",
 )
 
 PROJECT_MANAGED_INDEXES = (
@@ -97,6 +101,17 @@ PROJECT_MANAGED_INDEXES = (
     "idx_auth_admin_events_registration_request_id",
     "idx_auth_admin_events_action",
     "idx_auth_admin_events_created_at",
+    "idx_myh_source_check_runs_started_at",
+    "idx_myh_source_files_source_year",
+    "idx_myh_source_files_status",
+    "idx_myh_source_files_last_seen_at",
+    "idx_myh_refresh_runs_source_file_id",
+    "idx_myh_refresh_runs_started_at",
+    "idx_myh_refresh_runs_status",
+    "idx_admin_notifications_status",
+    "idx_admin_notifications_created_at",
+    "idx_admin_notifications_source_file_id",
+    "idx_admin_notifications_refresh_run_id",
 )
 
 CORE_DECISION_ROWS = (
@@ -273,6 +288,99 @@ def ensure_provider_submission_review_schema(conn: psycopg.Connection[dict[str, 
             )
 
 
+def ensure_applications_source_year_schema(conn: psycopg.Connection[dict[str, Any]]) -> None:
+    """Upgrade existing applications source-year check for future official MYH files.
+
+    Earlier project stages limited official historical data to 2020-2025. The
+    3.20 source-monitoring refresh pipeline must be able to import newly
+    published official MYH result years without a manual ALTER.
+    """
+    if not _constraint_exists(
+        conn,
+        table_name="applications",
+        constraint_name="applications_source_year_check",
+    ):
+        return
+
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT pg_get_constraintdef(oid) AS definition
+            FROM pg_constraint
+            WHERE conrelid = 'applications'::regclass
+              AND conname = 'applications_source_year_check';
+            """
+        )
+        row = cursor.fetchone()
+
+    definition = str(row["definition"] if isinstance(row, dict) else row[0]) if row else ""
+    if "2100" in definition:
+        return
+
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            ALTER TABLE applications
+            DROP CONSTRAINT applications_source_year_check;
+            """
+        )
+        cursor.execute(
+            """
+            ALTER TABLE applications
+            ADD CONSTRAINT applications_source_year_check
+            CHECK (source_year BETWEEN 2020 AND 2100);
+            """
+        )
+
+
+def ensure_myh_source_files_source_year_schema(conn: psycopg.Connection[dict[str, Any]]) -> None:
+    """Allow the source monitor to record older official MYH source files.
+
+    The live MYH result page still links older Excel workbooks, for example
+    2019 files. These are valid source-file metadata even when the curated
+    applications import validator remains stricter about which years can be
+    loaded into the official applications table. Existing local databases need
+    this code-managed constraint upgrade because CREATE TABLE IF NOT EXISTS
+    does not update already-created check constraints.
+    """
+    if not _constraint_exists(
+        conn,
+        table_name="myh_source_files",
+        constraint_name="myh_source_files_source_year_check",
+    ):
+        return
+
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT pg_get_constraintdef(oid) AS definition
+            FROM pg_constraint
+            WHERE conrelid = 'myh_source_files'::regclass
+              AND conname = 'myh_source_files_source_year_check';
+            """
+        )
+        row = cursor.fetchone()
+
+    definition = str(row["definition"] if isinstance(row, dict) else row[0]) if row else ""
+    if "1900" in definition:
+        return
+
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            ALTER TABLE myh_source_files
+            DROP CONSTRAINT myh_source_files_source_year_check;
+            """
+        )
+        cursor.execute(
+            """
+            ALTER TABLE myh_source_files
+            ADD CONSTRAINT myh_source_files_source_year_check
+            CHECK (source_year IS NULL OR source_year BETWEEN 1900 AND 2100);
+            """
+        )
+
+
 def _read_env(name: str) -> str | None:
     """Return a stripped environment variable value, or None when blank."""
     value = os.getenv(name, "").strip()
@@ -368,6 +476,8 @@ def ensure_database_ready(
     with open_connection(database_url) as conn:
         run_safe_sql_file(conn, schema_path)
         ensure_provider_submission_review_schema(conn)
+        ensure_applications_source_year_schema(conn)
+        ensure_myh_source_files_source_year_schema(conn)
         run_safe_sql_file(conn, indexes_path)
         seed_core_lookup_rows(conn)
         seed_auth_bootstrap_users(conn)

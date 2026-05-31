@@ -148,3 +148,37 @@ CREATE INDEX IF NOT EXISTS idx_auth_admin_events_action
 
 CREATE INDEX IF NOT EXISTS idx_auth_admin_events_created_at
     ON auth_admin_events (created_at DESC);
+
+
+CREATE INDEX IF NOT EXISTS idx_myh_source_check_runs_started_at
+    ON myh_source_check_runs (started_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_myh_source_files_source_year
+    ON myh_source_files (source_year DESC);
+
+CREATE INDEX IF NOT EXISTS idx_myh_source_files_status
+    ON myh_source_files (status);
+
+CREATE INDEX IF NOT EXISTS idx_myh_source_files_last_seen_at
+    ON myh_source_files (last_seen_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_myh_refresh_runs_source_file_id
+    ON myh_refresh_runs (source_file_id);
+
+CREATE INDEX IF NOT EXISTS idx_myh_refresh_runs_started_at
+    ON myh_refresh_runs (started_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_myh_refresh_runs_status
+    ON myh_refresh_runs (status);
+
+CREATE INDEX IF NOT EXISTS idx_admin_notifications_status
+    ON admin_notifications (status);
+
+CREATE INDEX IF NOT EXISTS idx_admin_notifications_created_at
+    ON admin_notifications (created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_admin_notifications_source_file_id
+    ON admin_notifications (source_file_id);
+
+CREATE INDEX IF NOT EXISTS idx_admin_notifications_refresh_run_id
+    ON admin_notifications (refresh_run_id);
