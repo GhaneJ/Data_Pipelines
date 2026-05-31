@@ -74,7 +74,7 @@ test("admin login routes to the admin workspace", async () => {
 test("signup submits a pending provider access request and does not create a session", async () => {
   const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = String(input);
-    if (url.includes("/providers")) return jsonResponse({ items: [{ provider_id: "999999", utbildningsanordnare: "Example Provider", total_applications: 25, approved_applications: 12, first_year: 2020, last_year: 2025 }], limit: 10, offset: 0 });
+    if (url.includes("/providers")) return jsonResponse({ items: [{ provider_id: "999999", utbildningsanordnare: "Example Provider", total_applications: 25, approved_applications: 12, first_year: 2020, last_year: 2025 }], total: 1, limit: 50, offset: 0 });
     if (url.includes("/auth/registration-requests")) return jsonResponse({ id: "r1", requested_username: "new-provider", display_name: "New Provider", email: null, provider_id: "999999", requested_role: "provider", organization_name: "Example Provider", message: "Please approve", status: "pending", created_at: "2030-01-01T00:00:00Z", reviewed_by_user_id: null, reviewed_at: null, review_notes: null, created_user_id: null }, 201);
     return jsonResponse({});
   });
@@ -84,7 +84,7 @@ test("signup submits a pending provider access request and does not create a ses
   await user.click(screen.getByRole("button", { name: /Request provider access/i }));
   await user.type(screen.getByLabelText(/Username/i), "new-provider");
   await user.type(screen.getByLabelText(/Display name/i), "New Provider");
-  await user.type(screen.getByLabelText(/^Password/i), "new-provider-password");
+  await user.type(screen.getByLabelText(/^Password/i), "NewProvider1!");
   await user.type(screen.getByLabelText(/Provider organization search/i), "Example");
   await waitFor(() => expect(screen.getByRole("button", { name: /Example Provider/i })).toBeInTheDocument());
   await user.click(screen.getByRole("button", { name: /Example Provider/i }));

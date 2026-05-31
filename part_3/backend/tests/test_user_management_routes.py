@@ -46,7 +46,7 @@ def signup_payload(username: str = "new-provider") -> dict[str, object]:
     return {
         "requested_username": username,
         "display_name": "New Provider User",
-        "password": "new-provider-password",
+        "password": "NewProvider1!",
         "provider_id": "999999",
         "organization_name": "Local Provider",
         "message": "Please approve my access for local demo.",
@@ -72,6 +72,27 @@ def test_public_signup_creates_pending_request_not_active_user_and_rejects_dupli
     assert admin_role.status_code == 422
 
 
+def test_signup_and_admin_user_creation_reject_weak_passwords() -> None:
+    client, conn = build_client()
+    seed_admin_provider(conn)
+
+    signup = client.post("/auth/registration-requests", json={**signup_payload("weak-signup"), "password": "weakpassword"})
+    managed = client.post(
+        "/admin/users",
+        headers=admin_header(),
+        json={
+            "username": "weak-managed",
+            "display_name": "Weak Managed",
+            "role": "provider",
+            "provider_id": "999999",
+            "password": "weakpassword",
+        },
+    )
+
+    assert signup.status_code == 422
+    assert managed.status_code == 422
+
+
 def test_admin_can_list_approve_request_and_new_provider_can_login() -> None:
     client, conn = build_client()
     seed_admin_provider(conn)
@@ -84,7 +105,7 @@ def test_admin_can_list_approve_request_and_new_provider_can_login() -> None:
         headers=admin_header(),
         json={"review_notes": "Approved for provider workspace demo."},
     )
-    login = client.post("/auth/login", json={"username": "approved-provider", "password": "new-provider-password"})
+    login = client.post("/auth/login", json={"username": "approved-provider", "password": "NewProvider1!"})
 
     assert listed.status_code == 200
     assert listed.json()["items"][0]["id"] == request["id"]
@@ -106,7 +127,7 @@ def test_admin_can_reject_registration_request_without_creating_user() -> None:
         headers=admin_header(),
         json={"review_notes": "Provider id could not be verified."},
     )
-    login = client.post("/auth/login", json={"username": "rejected-provider", "password": "new-provider-password"})
+    login = client.post("/auth/login", json={"username": "rejected-provider", "password": "NewProvider1!"})
 
     assert reject.status_code == 200
     assert reject.json()["status"] == "rejected"
@@ -126,7 +147,7 @@ def test_admin_user_management_create_update_deactivate_reactivate_reset_and_ses
             "display_name": "Managed Provider",
             "role": "provider",
             "provider_id": "999999",
-            "password": "managed-password",
+            "password": "ManagedPass1!",
         },
     )
     user_id = created.json()["id"]
@@ -138,22 +159,22 @@ def test_admin_user_management_create_update_deactivate_reactivate_reset_and_ses
             "display_name": "Managed Provider",
             "role": "provider",
             "provider_id": "999999",
-            "password": "managed-password",
+            "password": "ManagedPass1!",
         },
     )
     listed = client.get("/admin/users", headers=admin_header())
     patched = client.patch(f"/admin/users/{user_id}", headers=admin_header(), json={"display_name": "Managed Provider Updated"})
-    token_login = client.post("/auth/login", json={"username": "managed-provider", "password": "managed-password"})
+    token_login = client.post("/auth/login", json={"username": "managed-provider", "password": "ManagedPass1!"})
     sessions = client.get(f"/admin/users/{user_id}/sessions", headers=admin_header())
     deactivate = client.post(f"/admin/users/{user_id}/deactivate", headers=admin_header())
-    blocked_login = client.post("/auth/login", json={"username": "managed-provider", "password": "managed-password"})
+    blocked_login = client.post("/auth/login", json={"username": "managed-provider", "password": "ManagedPass1!"})
     reactivate = client.post(f"/admin/users/{user_id}/reactivate", headers=admin_header())
     reset = client.post(
         f"/admin/users/{user_id}/reset-password",
         headers=admin_header(),
-        json={"new_password": "managed-new-password", "revoke_existing_sessions": True},
+        json={"new_password": "ManagedNewPass1!", "revoke_existing_sessions": True},
     )
-    new_login = client.post("/auth/login", json={"username": "managed-provider", "password": "managed-new-password"})
+    new_login = client.post("/auth/login", json={"username": "managed-provider", "password": "ManagedNewPass1!"})
 
     assert created.status_code == 201
     assert "password_hash" not in created.text
@@ -170,7 +191,7 @@ def test_admin_user_management_create_update_deactivate_reactivate_reset_and_ses
     assert blocked_login.status_code == 401
     assert reactivate.status_code == 200
     assert reset.status_code == 200
-    assert "managed-new-password" not in reset.text
+    assert "ManagedNewPass1!" not in reset.text
     assert new_login.status_code == 200
 
 

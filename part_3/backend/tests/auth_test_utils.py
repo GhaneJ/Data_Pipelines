@@ -634,7 +634,7 @@ class FakeAuthConnection:
         *,
         requested_username: str = "new-provider",
         display_name: str = "New Provider",
-        password: str = "new-provider-password",
+        password: str = "NewProvider1!",
         provider_id: str = "999999",
         status: str = "pending",
     ) -> dict[str, Any]:

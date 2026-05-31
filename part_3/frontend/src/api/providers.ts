@@ -6,7 +6,7 @@ export function searchProviders(params: { q?: string; limit?: number; offset?: n
     auth: false,
     params: {
       q: params.q,
-      limit: params.limit ?? 12,
+      limit: params.limit ?? 50,
       offset: params.offset ?? 0,
     },
   });

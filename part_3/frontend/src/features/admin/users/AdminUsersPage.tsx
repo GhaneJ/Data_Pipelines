@@ -1,9 +1,9 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Fragment, FormEvent, useEffect, useMemo, useState } from "react";
 import { ActiveBadge, RoleBadge } from "@/components/shared/Badges";
 import { ConfirmButton } from "@/components/shared/ConfirmButton";
 import { EmptyState, ErrorPanel, LoadingState } from "@/components/shared/Feedback";
 import { ProviderSearchSelect } from "@/components/shared/ProviderSearchSelect";
-import { createUser, deactivateUser, listUserSessions, listUsers, reactivateUser, resetPassword, updateUser } from "@/api/adminUsers";
+import { createUser, deactivateUser, listUserSessions, listUsers, reactivateUser, resetPassword, revokeUserSession, updateUser } from "@/api/adminUsers";
 import type { ManagedUser, ProviderSummary, Role, SessionInfo } from "@/api/types";
 import { getPasswordPolicy, passwordPolicyMessage } from "@/auth/passwordPolicy";
 
@@ -33,6 +33,7 @@ function modeAction(mode: UserFormMode) {
 export function AdminUsersPage() {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [sessionsByUser, setSessionsByUser] = useState<Record<string, SessionInfo[]>>({});
+  const [openSessionsUserId, setOpenSessionsUserId] = useState<string | null>(null);
   const [form, setForm] = useState(blankForm);
   const [formMode, setFormMode] = useState<UserFormMode>("create");
   const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null);
@@ -41,8 +42,10 @@ export function AdminUsersPage() {
   const [status, setStatus] = useState("loading");
   const [error, setError] = useState<unknown>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [passwordFocused, setPasswordFocused] = useState(false);
   const requiresPassword = formMode === "create" || formMode === "reset";
   const passwordPolicy = getPasswordPolicy(form.password);
+  const showPasswordPolicy = requiresPassword && (passwordFocused || form.password.length > 0);
 
   async function load() {
     setStatus("loading");
@@ -72,6 +75,7 @@ export function AdminUsersPage() {
     setForm(blankForm);
     setFormMode("create");
     setSelectedUser(null);
+    setPasswordFocused(false);
     setError(null);
   }
 
@@ -161,8 +165,30 @@ export function AdminUsersPage() {
   }
 
   async function loadSessions(user: ManagedUser) {
-    const result = await listUserSessions(user.id);
-    setSessionsByUser((current) => ({ ...current, [user.id]: result.items }));
+    if (openSessionsUserId === user.id) {
+      setOpenSessionsUserId(null);
+      return;
+    }
+    setError(null);
+    try {
+      const result = await listUserSessions(user.id);
+      setSessionsByUser((current) => ({ ...current, [user.id]: result.items }));
+      setOpenSessionsUserId(user.id);
+    } catch (err) {
+      setError(err);
+    }
+  }
+
+  async function revokeSession(user: ManagedUser, session: SessionInfo) {
+    setError(null);
+    try {
+      await revokeUserSession(user.id, session.id);
+      setMessage("Session revoked successfully.");
+      const result = await listUserSessions(user.id);
+      setSessionsByUser((current) => ({ ...current, [user.id]: result.items }));
+    } catch (err) {
+      setError(err);
+    }
   }
 
   function onProviderSelected(provider_id: string, provider: ProviderSummary | null) {
@@ -223,20 +249,22 @@ export function AdminUsersPage() {
               </select>
             </label>
             {requiresPassword && (
-              <label className="field">{formMode === "reset" ? "New password" : "Password"}
+              <label className="field password-field">{formMode === "reset" ? "New password" : "Password"}
                 <input
                   type="password"
                   value={form.password}
                   required
                   minLength={10}
+                  onFocus={() => setPasswordFocused(true)}
+                  onBlur={() => setPasswordFocused(false)}
                   onChange={(event) => setForm({ ...form, password: event.target.value })}
                 />
+                {showPasswordPolicy && (
+                  <div className="password-policy inline-password-policy" aria-live="polite">
+                    {passwordPolicy.checks.map((check) => <span key={check.label} className={check.passed ? "passed" : ""}>{check.passed ? "✓" : "○"} {check.label}</span>)}
+                  </div>
+                )}
               </label>
-            )}
-            {requiresPassword && (
-              <div className="password-policy">
-                {passwordPolicy.checks.map((check) => <span key={check.label} className={check.passed ? "passed" : ""}>{check.passed ? "✓" : "○"} {check.label}</span>)}
-              </div>
             )}
             {form.role === "provider" && formMode !== "reset" && (
               <ProviderSearchSelect
@@ -294,30 +322,59 @@ export function AdminUsersPage() {
             <thead><tr><th>User</th><th>Role</th><th>Provider ownership</th><th>Status</th><th>Last login</th><th>Actions</th></tr></thead>
             <tbody>
               {users.map((user) => (
-                <tr key={user.id}>
-                  <td><strong>{user.username}</strong><span>{user.display_name}</span></td>
-                  <td><RoleBadge role={user.role} /></td>
-                  <td>{user.provider_id ? <code>{user.provider_id}</code> : "—"}<span>{user.role === "provider" ? "Provider workspace owner" : "Admin account"}</span></td>
-                  <td><ActiveBadge active={user.is_active} /></td>
-                  <td>{user.last_login_at ? new Date(user.last_login_at).toLocaleString() : "Never"}</td>
-                  <td className="actions">
-                    <button type="button" className="button secondary" onClick={() => startEdit(user)}>Edit</button>
-                    <button type="button" className="button secondary" onClick={() => startReset(user)}>Reset password</button>
-                    <ConfirmButton confirmText={`${user.is_active ? "Deactivate" : "Reactivate"} ${user.username}?`} onConfirm={() => toggleActive(user)}>{user.is_active ? "Deactivate" : "Reactivate"}</ConfirmButton>
-                    <button type="button" className="button secondary" onClick={() => void loadSessions(user)}>Sessions</button>
-                  </td>
-                </tr>
+                <Fragment key={user.id}>
+                  <tr>
+                    <td><strong>{user.username}</strong><span>{user.display_name}</span></td>
+                    <td><RoleBadge role={user.role} /></td>
+                    <td>
+                      {user.provider_id ? <code>{user.provider_id}</code> : "—"}
+                      <span>{user.role === "provider" ? "Provider workspace owner" : "Admin account"}</span>
+                    </td>
+                    <td><ActiveBadge active={user.is_active} /></td>
+                    <td>{user.last_login_at ? new Date(user.last_login_at).toLocaleString() : "Never"}</td>
+                    <td className="actions action-cluster">
+                      <button type="button" className="button secondary" onClick={() => startEdit(user)}>Edit</button>
+                      <button type="button" className="button secondary" onClick={() => startReset(user)}>Reset password</button>
+                      <ConfirmButton confirmText={`${user.is_active ? "Deactivate" : "Reactivate"} ${user.username}?`} onConfirm={() => toggleActive(user)}>{user.is_active ? "Deactivate" : "Reactivate"}</ConfirmButton>
+                      <button type="button" className="button secondary" onClick={() => void loadSessions(user)}>{openSessionsUserId === user.id ? "Hide sessions" : "View sessions"}</button>
+                    </td>
+                  </tr>
+                  {openSessionsUserId === user.id && (
+                    <tr className="expanded-row">
+                      <td colSpan={6}>
+                        <div className="session-panel-inline">
+                          <div className="section-heading compact">
+                            <div>
+                              <p className="eyebrow">Session management</p>
+                              <h3>{user.username}</h3>
+                            </div>
+                          </div>
+                          {(sessionsByUser[user.id] ?? []).length === 0 ? (
+                            <p className="muted">No sessions found for this user.</p>
+                          ) : (
+                            <ul className="session-list">
+                              {(sessionsByUser[user.id] ?? []).map((session) => (
+                                <li key={session.id}>
+                                  <div>
+                                    <strong>{session.is_active ? "Active session" : "Inactive session"}</strong>
+                                    <span>Created {new Date(session.created_at).toLocaleString()} · expires {new Date(session.expires_at).toLocaleString()}</span>
+                                  </div>
+                                  {session.is_active && <ConfirmButton confirmText="Revoke this user session?" onConfirm={() => revokeSession(user, session)}>Revoke</ConfirmButton>}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>
         </section>
       )}
-      {Object.entries(sessionsByUser).map(([userId, sessions]) => (
-        <section className="panel" key={userId}>
-          <h3>Sessions for {users.find((user) => user.id === userId)?.username}</h3>
-          {sessions.length === 0 ? <p className="muted">No sessions found.</p> : <ul className="timeline">{sessions.map((session) => <li key={session.id}>{session.is_active ? "Active" : "Inactive"} session · expires {new Date(session.expires_at).toLocaleString()}</li>)}</ul>}
-        </section>
-      ))}
+
     </div>
   );
 }

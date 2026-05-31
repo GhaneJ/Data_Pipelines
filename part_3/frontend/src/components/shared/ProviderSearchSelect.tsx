@@ -10,6 +10,9 @@ interface ProviderSearchSelectProps {
   helperText?: string;
 }
 
+const MIN_PROVIDER_SEARCH_LENGTH = 1;
+const PROVIDER_RESULT_LIMIT = 50;
+
 function providerId(provider: ProviderSummary): string {
   return String(provider.provider_id);
 }
@@ -24,15 +27,27 @@ export function ProviderSearchSelect({
   onChange,
   label = "Provider",
   required = false,
-  helperText = "Search organization name and select one result.",
+  helperText = "Search by provider organization name. Keep typing to narrow the result set.",
 }: ProviderSearchSelectProps) {
   const [query, setQuery] = useState("");
   const [providers, setProviders] = useState<ProviderSummary[]>([]);
+  const [totalMatches, setTotalMatches] = useState<number | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<ProviderSummary | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
+  const rootRef = useRef<HTMLLabelElement | null>(null);
+
+  useEffect(() => {
+    function closeOnOutsidePointer(event: PointerEvent) {
+      if (!rootRef.current || rootRef.current.contains(event.target as Node)) return;
+      setIsOpen(false);
+    }
+
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer);
+  }, []);
 
   useEffect(() => {
     if (!value) {
@@ -51,20 +66,30 @@ export function ProviderSearchSelect({
   useEffect(() => {
     const requestId = ++requestIdRef.current;
     const searchText = query.trim();
+
+    if (searchText.length < MIN_PROVIDER_SEARCH_LENGTH) {
+      setProviders([]);
+      setTotalMatches(null);
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
+
     const timeout = window.setTimeout(async () => {
       setIsLoading(true);
       setError(null);
       try {
-        const result = await searchProviders({ q: searchText || undefined, limit: 10 });
+        const result = await searchProviders({ q: searchText, limit: PROVIDER_RESULT_LIMIT });
         if (requestIdRef.current !== requestId) return;
         setProviders(result.items);
+        setTotalMatches(typeof result.total === "number" ? result.total : null);
       } catch (err) {
         if (requestIdRef.current !== requestId) return;
         setError(err instanceof Error ? err.message : "Providers could not be loaded.");
       } finally {
         if (requestIdRef.current === requestId) setIsLoading(false);
       }
-    }, 220);
+    }, 180);
 
     return () => window.clearTimeout(timeout);
   }, [query]);
@@ -74,6 +99,10 @@ export function ProviderSearchSelect({
     if (value) return `Selected provider ID ${value}`;
     return "No organization selected";
   }, [selectedProvider, value]);
+
+  function openOptions() {
+    if (query.trim().length >= MIN_PROVIDER_SEARCH_LENGTH) setIsOpen(true);
+  }
 
   function selectProvider(provider: ProviderSummary) {
     setSelectedProvider(provider);
@@ -85,12 +114,20 @@ export function ProviderSearchSelect({
   function clearProvider() {
     setSelectedProvider(null);
     setQuery("");
-    setIsOpen(true);
+    setProviders([]);
+    setTotalMatches(null);
+    setIsOpen(false);
     onChange("", null);
   }
 
+  const resultSummary = totalMatches === null
+    ? null
+    : totalMatches > providers.length
+      ? `Showing ${providers.length} of ${totalMatches} matching providers. Keep typing to narrow.`
+      : `${totalMatches} matching provider${totalMatches === 1 ? "" : "s"}.`;
+
   return (
-    <label className={`field provider-picker${isOpen ? " is-open" : ""}`}>
+    <label ref={rootRef} className={`field provider-picker${isOpen ? " is-open" : ""}`}>
       <span>{label}</span>
       <div className="provider-combobox">
         <input
@@ -99,14 +136,19 @@ export function ProviderSearchSelect({
           autoComplete="off"
           placeholder="Search provider organization"
           aria-label={`${label} search`}
-          onFocus={() => setIsOpen(true)}
+          onFocus={openOptions}
+          onClick={openOptions}
           onChange={(event) => {
-            setQuery(event.target.value);
-            setIsOpen(true);
+            const nextQuery = event.target.value;
+            setQuery(nextQuery);
+            setIsOpen(nextQuery.trim().length >= MIN_PROVIDER_SEARCH_LENGTH);
             if (value) onChange("", null);
           }}
           onKeyDown={(event) => {
-            if (event.key === "Escape") setIsOpen(false);
+            if (event.key === "Escape") {
+              setIsOpen(false);
+              (event.currentTarget as HTMLInputElement).blur();
+            }
           }}
         />
         {value && (
@@ -115,8 +157,8 @@ export function ProviderSearchSelect({
           </button>
         )}
       </div>
-      <input type="hidden" value={value} required={required} readOnly />
       {helperText && <small className="field-help">{helperText}</small>}
+      <input type="hidden" value={value} required={required} readOnly />
       {selectedProvider && (
         <div className="selected-provider-card" aria-live="polite">
           <strong>{selectionLabel}</strong>
@@ -130,9 +172,10 @@ export function ProviderSearchSelect({
       )}
       {isOpen && (
         <div className="provider-options" role="listbox" aria-label="Provider search results">
-          {isLoading && <div className="provider-option muted">Searching...</div>}
+          {isLoading && <div className="provider-option muted">Searching providers...</div>}
           {error && <div className="provider-option error-text">{error}</div>}
-          {!isLoading && !error && providers.length === 0 && <div className="provider-option muted">No matches found.</div>}
+          {!isLoading && !error && resultSummary && <div className="provider-option provider-result-summary">{resultSummary}</div>}
+          {!isLoading && !error && providers.length === 0 && <div className="provider-option muted">No matching provider found.</div>}
           {!isLoading && providers.map((provider) => (
             <button
               key={providerId(provider)}

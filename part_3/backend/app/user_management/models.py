@@ -12,6 +12,28 @@ from backend.app.auth.models import Role
 
 MAX_TEXT_LENGTH = 500
 MAX_NOTES_LENGTH = 4000
+MIN_MANAGED_PASSWORD_LENGTH = 10
+
+
+def validate_managed_password_strength(value: str) -> str:
+    """Validate passwords accepted by signup and admin user management.
+
+    Bootstrap/demo users from earlier sub-projects can keep their existing
+    passwords, but every new browser-created or admin-managed user must have
+    a stronger password. The raw password is only validated in memory and is
+    never returned by any response model.
+    """
+    if len(value) < MIN_MANAGED_PASSWORD_LENGTH:
+        raise ValueError(f"password must be at least {MIN_MANAGED_PASSWORD_LENGTH} characters long")
+    if not any(character.isupper() for character in value):
+        raise ValueError("password must contain at least one uppercase letter")
+    if not any(character.islower() for character in value):
+        raise ValueError("password must contain at least one lowercase letter")
+    if not any(character.isdigit() for character in value):
+        raise ValueError("password must contain at least one digit")
+    if not any(not character.isalnum() for character in value):
+        raise ValueError("password must contain at least one special character")
+    return value
 
 
 class RegistrationRequestStatus(str, Enum):
@@ -31,7 +53,7 @@ class RegistrationRequestCreateRequest(BaseModel):
 
     requested_username: str = Field(min_length=1, max_length=200)
     display_name: str = Field(min_length=1, max_length=200)
-    password: str = Field(min_length=8, max_length=500)
+    password: str = Field(min_length=MIN_MANAGED_PASSWORD_LENGTH, max_length=500)
     provider_id: str = Field(min_length=1, max_length=100)
     requested_role: Role = Role.PROVIDER
     email: str | None = Field(default=None, max_length=320)
@@ -54,6 +76,11 @@ class RegistrationRequestCreateRequest(BaseModel):
         if not cleaned:
             raise ValueError("requested_username must not be blank")
         return cleaned
+
+    @field_validator("password")
+    @classmethod
+    def strong_password(cls, value: str) -> str:
+        return validate_managed_password_strength(value)
 
     @field_validator("requested_role")
     @classmethod
@@ -152,7 +179,7 @@ class ManagedUserCreateRequest(BaseModel):
     username: str = Field(min_length=1, max_length=200)
     display_name: str = Field(min_length=1, max_length=200)
     role: Role
-    password: str = Field(min_length=8, max_length=500)
+    password: str = Field(min_length=MIN_MANAGED_PASSWORD_LENGTH, max_length=500)
     provider_id: str | None = Field(default=None, max_length=100)
     is_active: bool = True
 
@@ -172,6 +199,11 @@ class ManagedUserCreateRequest(BaseModel):
         if not cleaned:
             raise ValueError("username must not be blank")
         return cleaned
+
+    @field_validator("password")
+    @classmethod
+    def strong_password(cls, value: str) -> str:
+        return validate_managed_password_strength(value)
 
 
 class ManagedUserUpdateRequest(BaseModel):
@@ -195,10 +227,15 @@ class ManagedUserUpdateRequest(BaseModel):
 class PasswordResetRequest(BaseModel):
     """Admin payload for resetting a password."""
 
-    new_password: str = Field(min_length=8, max_length=500)
+    new_password: str = Field(min_length=MIN_MANAGED_PASSWORD_LENGTH, max_length=500)
     revoke_existing_sessions: bool = True
 
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("new_password")
+    @classmethod
+    def strong_new_password(cls, value: str) -> str:
+        return validate_managed_password_strength(value)
 
 
 class UserActionResponse(BaseModel):

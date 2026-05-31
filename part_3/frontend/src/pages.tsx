@@ -3,6 +3,7 @@ import { submitRegistrationRequest } from "@/api/auth";
 import { useAuth } from "@/auth/AuthContext";
 import { ErrorPanel } from "@/components/shared/Feedback";
 import { ProviderSearchSelect } from "@/components/shared/ProviderSearchSelect";
+import { getPasswordPolicy, passwordPolicyMessage } from "@/auth/passwordPolicy";
 
 export function LoginPage({ onNavigate }: { onNavigate: (path: string) => void }) {
   const { login } = useAuth();
@@ -50,10 +51,17 @@ export function SignupPage({ onNavigate }: { onNavigate: (path: string) => void 
   const [form, setForm] = useState({ requested_username: "", display_name: "", password: "", provider_id: "", email: "", organization_name: "", message: "" });
   const [error, setError] = useState<unknown>(null);
   const [success, setSuccess] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  const passwordPolicy = getPasswordPolicy(form.password);
+  const showPasswordPolicy = passwordFocused || form.password.length > 0;
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    if (!passwordPolicy.isValid) {
+      setError(new Error(passwordPolicyMessage()));
+      return;
+    }
     try {
       await submitRegistrationRequest({
         requested_username: form.requested_username,
@@ -93,13 +101,28 @@ export function SignupPage({ onNavigate }: { onNavigate: (path: string) => void 
       <form className="form-grid" onSubmit={onSubmit}>
         <label>Username<input value={form.requested_username} required onChange={(event) => setForm({ ...form, requested_username: event.target.value })} /></label>
         <label>Display name<input value={form.display_name} required onChange={(event) => setForm({ ...form, display_name: event.target.value })} /></label>
-        <label>Password<input type="password" value={form.password} required minLength={8} onChange={(event) => setForm({ ...form, password: event.target.value })} /></label>
+        <label className="password-field">Password
+          <input
+            type="password"
+            value={form.password}
+            required
+            minLength={10}
+            onFocus={() => setPasswordFocused(true)}
+            onBlur={() => setPasswordFocused(false)}
+            onChange={(event) => setForm({ ...form, password: event.target.value })}
+          />
+          {showPasswordPolicy && (
+            <div className="password-policy inline-password-policy compact-policy" aria-live="polite">
+              {passwordPolicy.checks.map((check) => <span key={check.label} className={check.passed ? "passed" : ""}>{check.passed ? "✓" : "○"} {check.label}</span>)}
+            </div>
+          )}
+        </label>
         <label>Email optional<input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
         <ProviderSearchSelect
           value={form.provider_id}
           required
           label="Provider organization"
-          onChange={(provider_id, provider) => setForm({ ...form, provider_id, organization_name: provider?.utbildningsanordnare ?? form.organization_name })}
+          onChange={(provider_id, provider) => setForm((current) => ({ ...current, provider_id, organization_name: provider?.utbildningsanordnare ?? current.organization_name }))}
         />
         <label>Organization note optional<input value={form.organization_name} onChange={(event) => setForm({ ...form, organization_name: event.target.value })} /></label>
         <label className="wide">Reason/message<textarea value={form.message} onChange={(event) => setForm({ ...form, message: event.target.value })} /></label>
