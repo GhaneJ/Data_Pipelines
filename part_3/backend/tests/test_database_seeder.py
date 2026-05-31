@@ -73,6 +73,8 @@ def test_project_managed_table_list_is_complete() -> None:
         "api_keys",
         "provider_application_submissions",
         "provider_submission_review_events",
+        "user_registration_requests",
+        "auth_admin_events",
     }
 
 
@@ -89,7 +91,10 @@ def test_indexes_sql_contains_required_indexes() -> None:
     indexes_sql = database_seeder.read_sql_file(database_seeder.INDEXES_PATH)
 
     for index_name in database_seeder.PROJECT_MANAGED_INDEXES:
-        assert f"CREATE INDEX IF NOT EXISTS {index_name}" in indexes_sql
+        assert (
+            f"CREATE INDEX IF NOT EXISTS {index_name}" in indexes_sql
+            or f"CREATE UNIQUE INDEX IF NOT EXISTS {index_name}" in indexes_sql
+        )
 
 
 def test_startup_sql_files_are_non_destructive() -> None:

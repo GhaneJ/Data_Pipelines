@@ -201,7 +201,149 @@ class FakeAuthCursor:
 
 
         if "from providers" in normalized_sql and "where provider_id" in normalized_sql:
-            self._one = self.conn.provider_names_by_id.get(str(params["provider_id"]))
+            provider_id = str(params["provider_id"])
+            self._one = self.conn.provider_names_by_id.get(provider_id) or ({"?column?": 1} if provider_id in self.conn.valid_provider_ids else None)
+            return
+
+        if "from user_registration_requests" in normalized_sql and "where requested_username" in normalized_sql:
+            username = str(params["username"]).lower()
+            self._one = next(
+                (row for row in self.conn.registration_requests_by_id.values() if row["requested_username"] == username and row["status"] == "pending"),
+                None,
+            )
+            return
+
+        if "insert into user_registration_requests" in normalized_sql:
+            row = {
+                "id": params["id"],
+                "requested_username": params["requested_username"],
+                "display_name": params["display_name"],
+                "email": params.get("email"),
+                "provider_id": params["provider_id"],
+                "requested_role": "provider",
+                "organization_name": params.get("organization_name"),
+                "message": params.get("message"),
+                "pending_password_hash": params["pending_password_hash"],
+                "pending_password_salt": params["pending_password_salt"],
+                "pending_password_algorithm": params["pending_password_algorithm"],
+                "pending_password_iterations": params["pending_password_iterations"],
+                "status": "pending",
+                "created_at": utc_now(),
+                "reviewed_by_user_id": None,
+                "reviewed_at": None,
+                "review_notes": None,
+                "created_user_id": None,
+            }
+            self.conn.registration_requests_by_id[row["id"]] = row
+            self._one = {k: v for k, v in row.items() if not k.startswith("pending_password")}
+            self.rowcount = 1
+            return
+
+        if "from user_registration_requests" in normalized_sql and "where id" in normalized_sql:
+            row = self.conn.registration_requests_by_id.get(str(params["id"]))
+            if row:
+                self._one = dict(row) if "pending_password_hash" in normalized_sql else {k: v for k, v in row.items() if not k.startswith("pending_password")}
+            return
+
+        if "from user_registration_requests" in normalized_sql and "order by created_at" in normalized_sql:
+            rows = list(self.conn.registration_requests_by_id.values())
+            if "where status" in normalized_sql:
+                rows = [row for row in rows if row["status"] == params["status"]]
+            rows.sort(key=lambda row: (row["created_at"], row["requested_username"]), reverse=True)
+            self._all = [{k: v for k, v in row.items() if not k.startswith("pending_password")} for row in rows[int(params.get("offset", 0)): int(params.get("offset", 0)) + int(params.get("limit", len(rows)))]]
+            return
+
+        if "update user_registration_requests" in normalized_sql and "set status = 'approved'" in normalized_sql:
+            row = self.conn.registration_requests_by_id.get(str(params["id"]))
+            if row:
+                row["status"] = "approved"
+                row["reviewed_by_user_id"] = params["reviewed_by_user_id"]
+                row["reviewed_at"] = utc_now()
+                row["review_notes"] = params.get("review_notes")
+                row["created_user_id"] = params.get("created_user_id")
+                self._one = {k: v for k, v in row.items() if not k.startswith("pending_password")}
+                self.rowcount = 1
+            return
+
+        if "update user_registration_requests" in normalized_sql and "set status = 'rejected'" in normalized_sql:
+            row = self.conn.registration_requests_by_id.get(str(params["id"]))
+            if row:
+                row["status"] = "rejected"
+                row["reviewed_by_user_id"] = params["reviewed_by_user_id"]
+                row["reviewed_at"] = utc_now()
+                row["review_notes"] = params.get("review_notes")
+                self._one = {k: v for k, v in row.items() if not k.startswith("pending_password")}
+                self.rowcount = 1
+            return
+
+        if "from auth_users" in normalized_sql and "order by created_at" in normalized_sql:
+            rows = list(self.conn.users_by_username.values())
+            if "role =" in normalized_sql:
+                rows = [row for row in rows if row["role"] == params["role"]]
+            if "is_active =" in normalized_sql:
+                rows = [row for row in rows if row["is_active"] == params["is_active"]]
+            if "ilike" in normalized_sql:
+                needle = str(params["search"]).strip("%").lower()
+                rows = [row for row in rows if needle in row["username"].lower() or needle in row["display_name"].lower() or needle in str(row.get("provider_id") or "").lower()]
+            rows.sort(key=lambda row: (row["created_at"], row["username"]), reverse=True)
+            self._all = [dict(row) for row in rows[int(params.get("offset", 0)): int(params.get("offset", 0)) + int(params.get("limit", len(rows)))]]
+            return
+
+        if "update auth_users" in normalized_sql and "set display_name" in normalized_sql:
+            user = self.conn.user_by_id(str(params["user_id"]))
+            if user:
+                user["display_name"] = params["display_name"]
+                user["role"] = params["role"]
+                user["provider_id"] = params.get("provider_id")
+                user["is_active"] = params["is_active"]
+                user["updated_at"] = utc_now()
+                self._one = dict(user)
+                self.rowcount = 1
+            return
+
+        if "update auth_users" in normalized_sql and "set password_hash" in normalized_sql:
+            user = self.conn.user_by_id(str(params["user_id"]))
+            if user:
+                user["password_hash"] = params["password_hash"]
+                user["password_salt"] = params["password_salt"]
+                user["password_algorithm"] = params["password_algorithm"]
+                user["password_iterations"] = params["password_iterations"]
+                user["password_changed_at"] = utc_now()
+                user["failed_login_count"] = 0
+                user["locked_until"] = None
+                user["updated_at"] = utc_now()
+                self._one = dict(user)
+                self.rowcount = 1
+            return
+
+        if "update auth_users" in normalized_sql and "set is_active" in normalized_sql:
+            user = self.conn.user_by_id(str(params["user_id"]))
+            if user:
+                user["is_active"] = params["is_active"]
+                user["updated_at"] = utc_now()
+                self.rowcount = 1
+            return
+
+        if "from auth_access_tokens" in normalized_sql and "where user_id" in normalized_sql and "order by created_at" in normalized_sql:
+            rows = [dict(token) for token in self.conn.tokens_by_hash.values() if str(token["user_id"]) == str(params["user_id"])]
+            for row in rows:
+                row.pop("token_hash", None)
+                row["is_active"] = row["revoked_at"] is None and row["expires_at"] > utc_now()
+            rows.sort(key=lambda row: row["created_at"], reverse=True)
+            self._all = rows
+            return
+
+        if "update auth_access_tokens" in normalized_sql and "where id" in normalized_sql and "user_id" in normalized_sql:
+            token = self.conn.token_by_id(str(params["session_id"]))
+            if token and str(token["user_id"]) == str(params["user_id"]) and token["revoked_at"] is None:
+                token["revoked_at"] = utc_now()
+                self._one = {"id": token["id"]}
+                self.rowcount = 1
+            return
+
+        if "insert into auth_admin_events" in normalized_sql:
+            self.conn.admin_events.append(dict(params))
+            self.rowcount = 1
             return
 
         if "insert into provider_application_submissions" in normalized_sql:
@@ -377,7 +519,10 @@ class FakeAuthConnection:
         self.api_keys_by_id: dict[str, dict[str, Any]] = {}
         self.provider_submissions_by_id: dict[str, dict[str, Any]] = {}
         self.review_events_by_id: dict[str, dict[str, Any]] = {}
-        self.provider_names_by_id: dict[str, dict[str, str]] = {}
+        self.provider_names_by_id: dict[str, dict[str, str]] = {"999999": {"utbildningsanordnare": "Local Provider"}}
+        self.valid_provider_ids: set[str] = {"999999"}
+        self.registration_requests_by_id: dict[str, dict[str, Any]] = {}
+        self.admin_events: list[dict[str, Any]] = []
         self.executed: list[tuple[str, dict[str, Any] | None]] = []
         self.executed_many: list[tuple[str, tuple[object, ...]]] = []
 
@@ -481,6 +626,40 @@ class FakeAuthConnection:
     def add_provider_name(self, provider_id: str, provider_name: str) -> dict[str, str]:
         row = {"utbildningsanordnare": provider_name}
         self.provider_names_by_id[str(provider_id)] = row
+        self.valid_provider_ids.add(str(provider_id))
+        return row
+
+    def add_registration_request(
+        self,
+        *,
+        requested_username: str = "new-provider",
+        display_name: str = "New Provider",
+        password: str = "new-provider-password",
+        provider_id: str = "999999",
+        status: str = "pending",
+    ) -> dict[str, Any]:
+        config = hash_password(password)
+        row = {
+            "id": str(uuid4()),
+            "requested_username": requested_username.strip().lower(),
+            "display_name": display_name,
+            "email": None,
+            "provider_id": provider_id,
+            "requested_role": "provider",
+            "organization_name": None,
+            "message": "Local test request",
+            "pending_password_hash": config.password_hash,
+            "pending_password_salt": config.password_salt,
+            "pending_password_algorithm": config.password_algorithm,
+            "pending_password_iterations": config.password_iterations,
+            "status": status,
+            "created_at": utc_now(),
+            "reviewed_by_user_id": None,
+            "reviewed_at": None,
+            "review_notes": None,
+            "created_user_id": None,
+        }
+        self.registration_requests_by_id[row["id"]] = row
         return row
 
     def add_provider_submission(
