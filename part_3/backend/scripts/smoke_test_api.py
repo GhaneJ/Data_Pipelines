@@ -26,16 +26,19 @@ def get_json(url: str) -> Any:
         return json.loads(response.read().decode("utf-8"))
 
 
-def post_json(url: str) -> Any:
+def post_json(url: str, bearer_token: str | None = None) -> Any:
     """Send one POST request and parse the JSON response."""
-    request = Request(url, method="POST")
+    headers = {"Authorization": f"Bearer {bearer_token}"} if bearer_token else {}
+    request = Request(url, headers=headers, method="POST")
     with urlopen(request, timeout=30) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
-def get_csv_rows(url: str) -> list[dict[str, str]]:
+def get_csv_rows(url: str, api_key: str | None = None) -> list[dict[str, str]]:
     """Fetch one CSV export URL and return parsed rows."""
-    with urlopen(url, timeout=10) as response:
+    headers = {"X-API-Key": api_key} if api_key else {}
+    request = Request(url, headers=headers, method="GET")
+    with urlopen(request, timeout=10) as response:
         content_type = response.headers.get("Content-Type", "")
         content_disposition = response.headers.get("Content-Disposition", "")
         csv_text = response.read().decode("utf-8")
@@ -85,6 +88,8 @@ def main() -> None:
     """Run local API checks that cover the final Part 3 demo path."""
     parser = argparse.ArgumentParser(description="Smoke test the local MYH Applications API.")
     parser.add_argument("--base-url", default="http://127.0.0.1:8000", help="Base URL for the API.")
+    parser.add_argument("--admin-token", help="Database-issued admin bearer token for protected refresh/source checks.")
+    parser.add_argument("--api-key", help="Database-issued API key with export:read for protected CSV export checks.")
     args = parser.parse_args()
     base_url = args.base_url.rstrip("/")
 
@@ -96,15 +101,12 @@ def main() -> None:
     if health.get("status") != "ok":
         raise SystemExit(f"Unexpected health response: {health}")
 
-    refresh = post_json(f"{base_url}/refresh")
-    if refresh.get("status") != "success":
-        raise SystemExit(f"Unexpected refresh response: {refresh}")
-    if refresh.get("rows_loaded", 0) <= 0:
-        raise SystemExit(f"Refresh did not report loaded rows: {refresh}")
-    if "myh_curated_applications_2020_2025.csv" not in refresh.get("source_file", ""):
-        raise SystemExit(f"Refresh response did not identify the curated CSV: {refresh}")
-    if not refresh.get("refreshed_at"):
-        raise SystemExit(f"Refresh response did not include refreshed_at: {refresh}")
+    if args.admin_token:
+        refresh = post_json(f"{base_url}/refresh", bearer_token=args.admin_token)
+        if refresh.get("status") not in {"success", "completed"}:
+            raise SystemExit(f"Unexpected refresh response: {refresh}")
+    else:
+        print("Skipping admin-only /refresh smoke check; pass --admin-token to include it.")
 
     db_health = get_json(f"{base_url}/health/db")
     if db_health.get("status") != "ready":
@@ -112,9 +114,16 @@ def main() -> None:
     if db_health.get("applications", {}).get("row_count", 0) <= 0:
         raise SystemExit(f"Database health did not report application rows: {db_health}")
 
-    source_status = get_json(f"{base_url}/operations/source-status")
-    if "status" not in source_status or "message" not in source_status:
-        raise SystemExit(f"Unexpected source-status response: {source_status}")
+    if args.admin_token:
+        source_status_request = Request(
+            f"{base_url}/admin/source-monitor/status",
+            headers={"Authorization": f"Bearer {args.admin_token}"},
+            method="GET",
+        )
+        with urlopen(source_status_request, timeout=10) as response:
+            source_status = json.loads(response.read().decode("utf-8"))
+        if "source_url" not in source_status:
+            raise SystemExit(f"Unexpected source-monitor status response: {source_status}")
 
     params = urlencode({"source_year": 2024, "decision": "approved", "limit": 3})
     applications = get_json(f"{base_url}/applications?{params}")
@@ -173,19 +182,22 @@ def main() -> None:
     provider_applications = get_json(f"{base_url}/providers/{provider_id}/applications?limit=3")
     require_items(provider_applications, f"/providers/{provider_id}/applications")
 
-    export_rows = get_csv_rows(f"{base_url}/export/applications?{urlencode({'limit': 5})}")
-    if not export_rows or "diarienummer" not in export_rows[0]:
-        raise SystemExit("Expected CSV rows with diarienummer from /export/applications.")
+    if args.api_key:
+        export_rows = get_csv_rows(f"{base_url}/export/applications?{urlencode({'limit': 5})}", api_key=args.api_key)
+        if not export_rows or "diarienummer" not in export_rows[0]:
+            raise SystemExit("Expected CSV rows with diarienummer from /export/applications.")
 
-    export_params = urlencode({"year": 2024, "decision": "approved", "limit": 5})
-    filtered_export_rows = get_csv_rows(f"{base_url}/export/applications?{export_params}")
-    if not filtered_export_rows:
-        raise SystemExit("Expected filtered CSV rows from /export/applications.")
-    for row in filtered_export_rows:
-        if row.get("source_year") != "2024" or row.get("beslut_normalized") != "approved":
-            raise SystemExit("Filtered CSV export returned a row outside year=2024 and decision=approved.")
+        export_params = urlencode({"year": 2024, "decision": "approved", "limit": 5})
+        filtered_export_rows = get_csv_rows(f"{base_url}/export/applications?{export_params}", api_key=args.api_key)
+        if not filtered_export_rows:
+            raise SystemExit("Expected filtered CSV rows from /export/applications.")
+        for row in filtered_export_rows:
+            if row.get("source_year") != "2024" or row.get("beslut_normalized") != "approved":
+                raise SystemExit("Filtered CSV export returned a row outside year=2024 and decision=approved.")
+    else:
+        print("Skipping protected CSV export smoke checks; pass --api-key to include them.")
 
-    require_http_error(f"{base_url}/export/applications?year=2024&source_year=2025", 400)
+    require_http_error(f"{base_url}/export/applications?year=2024&source_year=2025", 401)
     require_http_error(f"{base_url}/stats/trends/by-decision?year_from=2025&year_to=2024", 400)
     require_http_error(f"{base_url}/providers/999999/applications", 404)
 

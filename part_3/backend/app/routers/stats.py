@@ -66,8 +66,8 @@ def get_stats_by_decision(conn: DatabaseConnection) -> list[dict[str, Any]]:
 @router.get("/stats/trends/by-decision", response_model=list[DecisionTrend])
 def get_trend_by_decision(
     conn: DatabaseConnection,
-    year_from: Annotated[int | None, Query(ge=2020, le=2025)] = None,
-    year_to: Annotated[int | None, Query(ge=2020, le=2025)] = None,
+    year_from: Annotated[int | None, Query(ge=2020, le=2100)] = None,
+    year_to: Annotated[int | None, Query(ge=2020, le=2100)] = None,
     decision: Annotated[str | None, Query(pattern="^(approved|rejected|withdrawn)$")] = None,
 ) -> list[dict[str, Any]]:
     """Return yearly trend rows grouped by normalized decision."""
@@ -79,8 +79,8 @@ def get_trend_by_decision(
 @router.get("/stats/trends/by-region", response_model=list[RegionTrend])
 def get_trend_by_region(
     conn: DatabaseConnection,
-    year_from: Annotated[int | None, Query(ge=2020, le=2025)] = None,
-    year_to: Annotated[int | None, Query(ge=2020, le=2025)] = None,
+    year_from: Annotated[int | None, Query(ge=2020, le=2100)] = None,
+    year_to: Annotated[int | None, Query(ge=2020, le=2100)] = None,
     region: Annotated[str | None, Query(description="Filter by län/region.")] = None,
     lan: Annotated[str | None, Query(description="Alias for region/län.")] = None,
     limit: Annotated[int | None, Query(ge=1, le=25, description="Return the top N regions across the selected years.")] = None,
@@ -94,8 +94,8 @@ def get_trend_by_region(
 @router.get("/stats/trends/by-education-area", response_model=list[EducationAreaTrend])
 def get_trend_by_education_area(
     conn: DatabaseConnection,
-    year_from: Annotated[int | None, Query(ge=2020, le=2025)] = None,
-    year_to: Annotated[int | None, Query(ge=2020, le=2025)] = None,
+    year_from: Annotated[int | None, Query(ge=2020, le=2100)] = None,
+    year_to: Annotated[int | None, Query(ge=2020, le=2100)] = None,
     education_area: Annotated[str | None, Query(description="Filter by utbildningsområde.")] = None,
     limit: Annotated[int | None, Query(ge=1, le=25, description="Return the top N education areas across the selected years.")] = None,
 ) -> list[dict[str, Any]]:

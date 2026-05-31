@@ -281,7 +281,7 @@ def read_source_status_manifest(manifest_path: Path = DEFAULT_MANIFEST_PATH) -> 
             "known_latest_source_snapshot": None,
             "local_latest_source_year": None,
             "up_to_date": None,
-            "message": "No source check has been recorded yet. Run POST /operations/check-source or the check_source_status.py script.",
+            "message": "No source check has been recorded yet. Run POST /admin/source-monitor/check with an admin bearer token, or use the legacy check_source_status.py script.",
             "error": None,
         }
 

@@ -22,8 +22,8 @@ ExportAPIKeyPrincipal = Annotated[APIKeyPrincipal, Depends(require_api_key_scope
 def export_applications_csv(
     conn: DatabaseConnection,
     api_key_principal: ExportAPIKeyPrincipal,
-    year: Annotated[int | None, Query(ge=2020, le=2025, description="User-facing alias for source_year.")] = None,
-    source_year: Annotated[int | None, Query(ge=2020, le=2025, description="Source-year alias for export filters.")] = None,
+    year: Annotated[int | None, Query(ge=2020, le=2100, description="User-facing alias for source_year.")] = None,
+    source_year: Annotated[int | None, Query(ge=2020, le=2100, description="Source-year alias for export filters.")] = None,
     decision: Annotated[str | None, Query(pattern="^(approved|rejected|withdrawn)$")] = None,
     region: Annotated[str | None, Query(description="Filter by län/region.")] = None,
     lan: Annotated[str | None, Query(description="Alias for region/län.")] = None,

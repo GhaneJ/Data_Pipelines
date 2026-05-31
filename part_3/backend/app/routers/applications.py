@@ -18,7 +18,7 @@ router = APIRouter(tags=["applications"])
 @router.get("/applications", response_model=ApplicationList)
 def list_applications(
     conn: DatabaseConnection,
-    source_year: Annotated[int | None, Query(ge=2020, le=2025)] = None,
+    source_year: Annotated[int | None, Query(ge=2020, le=2100)] = None,
     decision: Annotated[str | None, Query(pattern="^(approved|rejected|withdrawn)$")] = None,
     region: Annotated[str | None, Query(description="Filter by län/region.")] = None,
     lan: Annotated[str | None, Query(description="Alias for region/län.")] = None,

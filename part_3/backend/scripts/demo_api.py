@@ -29,9 +29,10 @@ class DemoStep:
     call_by_default: bool = True
 
 
-def fetch_json(method: str, url: str) -> Any:
+def fetch_json(method: str, url: str, bearer_token: str | None = None) -> Any:
     """Call one JSON endpoint and return parsed data."""
-    request = Request(url, method=method)
+    headers = {"Authorization": f"Bearer {bearer_token}"} if bearer_token else {}
+    request = Request(url, headers=headers, method=method)
     with urlopen(request, timeout=30) as response:
         return json.loads(response.read().decode("utf-8"))
 
@@ -86,6 +87,7 @@ def main() -> None:
     parser.add_argument("--print-only", action="store_true", help="Only print the demo flow; do not call the API.")
     parser.add_argument("--api-key", help="Database-issued API key with export:read scope for calling the protected CSV export step.")
     parser.add_argument("--include-refresh", action="store_true", help="Also call POST /refresh at the end of the demo flow.")
+    parser.add_argument("--admin-token", help="Database-issued admin bearer token for optional admin operation calls.")
     args = parser.parse_args()
     base_url = args.base_url.rstrip("/")
 
@@ -102,16 +104,38 @@ def main() -> None:
         DemoStep("Health check", "GET", "/health", "Quick operational check for local validation."),
         DemoStep("Database readiness", "GET", "/health/db", "Checks database connection, required tables, and loaded rows."),
         DemoStep(
-            "Source-check status",
+            "Admin source-monitor status",
             "GET",
-            "/operations/source-status",
-            "Shows the last recorded MYH source-page check without changing application data.",
+            "/admin/source-monitor/status",
+            "Shows monitor configuration, last check, latest refresh run, and unread notifications; requires admin bearer token.",
+            call_by_default=False,
         ),
         DemoStep(
-            "Manual source check",
+            "Admin source check",
             "POST",
-            "/operations/check-source",
-            "Checks the configured MYH source page and writes the local manifest; not called by default.",
+            "/admin/source-monitor/check",
+            "Checks the configured MYH source page, records source files, and creates notifications; requires admin bearer token.",
+            call_by_default=False,
+        ),
+        DemoStep(
+            "Admin source files",
+            "GET",
+            "/admin/source-files",
+            "Lists detected official MYH source files with new/changed/known/imported state; requires admin bearer token.",
+            call_by_default=False,
+        ),
+        DemoStep(
+            "Admin source-file import",
+            "POST",
+            "/admin/source-files/{source_file_id}/import",
+            "Validates and atomically imports one official source file by affected source year; requires admin bearer token.",
+            call_by_default=False,
+        ),
+        DemoStep(
+            "Admin notifications",
+            "GET",
+            "/admin/notifications",
+            "Shows source-monitor and refresh notifications; requires admin bearer token.",
             call_by_default=False,
         ),
         DemoStep(
@@ -313,7 +337,7 @@ def main() -> None:
             response_kind="csv",
         ),
         DemoStep("Interactive API docs", "GET", "/docs", "Open this in the browser to show FastAPI/OpenAPI documentation.", call_by_default=False),
-        DemoStep("Operational refresh", "POST", "/refresh", "Reloads PostgreSQL from the existing curated CSV.", call_by_default=False),
+        DemoStep("Operational refresh", "POST", "/refresh", "Admin-only compatibility refresh through the robust 3.20 refresh service.", call_by_default=False),
     ]
 
     for index, step in enumerate(steps, start=1):
@@ -329,15 +353,15 @@ def main() -> None:
         should_call = step.call_by_default and not args.print_only
         if step.title == "Filtered CSV export" and not args.api_key:
             should_call = False
-        if step.title == "Operational refresh" and args.include_refresh and not args.print_only:
+        if step.title == "Operational refresh" and args.include_refresh and args.admin_token and not args.print_only:
             should_call = True
 
         if not should_call:
             extra = None
             if step.title == "Interactive API docs":
                 extra = "open in browser"
-            elif step.title == "Manual source check":
-                extra = "not called by default; run from /docs or use the check_source_status.py script"
+            elif step.title in {"Admin source-monitor status", "Admin source check", "Admin source files", "Admin source-file import", "Admin notifications"}:
+                extra = "not called by default; log in through /auth/login and send Authorization: Bearer <admin-token> from /docs or curl"
             elif step.title in {
                 "Protected admin notes",
                 "Protected admin note list",
@@ -356,6 +380,11 @@ def main() -> None:
                 "Admin request changes",
                 "Admin approve submission",
                 "Admin review events",
+                "Admin source-monitor status",
+                "Admin source check",
+                "Admin source files",
+                "Admin source-file import",
+                "Admin notifications",
             }:
                 extra = "not called by default; log in through /auth/login and send Authorization: Bearer <admin-token> from /docs or curl"
             elif step.title == "Provider access request":
@@ -365,7 +394,9 @@ def main() -> None:
             elif step.title == "Filtered CSV export" and not args.api_key:
                 extra = "requires a database-issued X-API-Key with export:read; pass --api-key to call it"
             elif step.title == "Operational refresh" and not args.include_refresh:
-                extra = "not called by default; add --include-refresh to run it"
+                extra = "not called by default; add --include-refresh --admin-token <token> to run it"
+            elif step.title == "Operational refresh" and args.include_refresh and not args.admin_token:
+                extra = "requires --admin-token because POST /refresh is admin-only in 3.20"
             print_step(index, step, url, extra)
             continue
 
@@ -374,7 +405,7 @@ def main() -> None:
             columns = list(rows[0]) if rows else []
             result = f"csv_rows={len(rows)}, first_columns={columns[:6]}"
         else:
-            data = fetch_json(step.method, url)
+            data = fetch_json(step.method, url, bearer_token=args.admin_token if step.title == "Operational refresh" else None)
             result = summarize_json(data)
             if step.title == "Filtered application browsing":
                 items = data.get("items", []) if isinstance(data, dict) else []
