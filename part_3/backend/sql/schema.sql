@@ -237,3 +237,58 @@ CREATE TABLE IF NOT EXISTS provider_submission_review_events (
     CHECK (to_status IN ('draft', 'submitted', 'under_review', 'needs_changes', 'approved', 'rejected'))
 );
 
+
+-- Controlled provider access requests. Public signup inserts pending rows here;
+-- only an admin approval creates a real provider user in auth_users.
+CREATE TABLE IF NOT EXISTS user_registration_requests (
+    id UUID PRIMARY KEY,
+    requested_username TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    email TEXT NULL,
+    provider_id TEXT NOT NULL,
+    requested_role TEXT NOT NULL DEFAULT 'provider',
+    organization_name TEXT NULL,
+    message TEXT NULL,
+    pending_password_hash TEXT NOT NULL,
+    pending_password_salt TEXT NOT NULL,
+    pending_password_algorithm TEXT NOT NULL,
+    pending_password_iterations INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    reviewed_by_user_id UUID NULL REFERENCES auth_users(id) ON DELETE SET NULL,
+    reviewed_at TIMESTAMPTZ NULL,
+    review_notes TEXT NULL,
+    created_user_id UUID NULL REFERENCES auth_users(id) ON DELETE SET NULL,
+    CHECK (btrim(requested_username) <> ''),
+    CHECK (btrim(display_name) <> ''),
+    CHECK (btrim(provider_id) <> ''),
+    CHECK (requested_role = 'provider'),
+    CHECK (pending_password_iterations > 0),
+    CHECK (status IN ('pending', 'approved', 'rejected')),
+    CHECK ((status = 'pending' AND reviewed_at IS NULL) OR (status <> 'pending' AND reviewed_at IS NOT NULL)),
+    CHECK ((status = 'approved' AND created_user_id IS NOT NULL) OR status <> 'approved')
+);
+
+-- Small admin/auth audit trail for explainability. It deliberately stores only
+-- safe metadata and notes, never passwords, bearer tokens, or API keys.
+CREATE TABLE IF NOT EXISTS auth_admin_events (
+    id UUID PRIMARY KEY,
+    actor_user_id UUID NULL REFERENCES auth_users(id) ON DELETE SET NULL,
+    target_user_id UUID NULL REFERENCES auth_users(id) ON DELETE SET NULL,
+    registration_request_id UUID NULL REFERENCES user_registration_requests(id) ON DELETE SET NULL,
+    action TEXT NOT NULL,
+    notes TEXT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (btrim(action) <> ''),
+    CHECK (action IN (
+        'registration_request_created',
+        'registration_request_approved',
+        'registration_request_rejected',
+        'user_created',
+        'user_updated',
+        'password_reset',
+        'user_deactivated',
+        'user_reactivated',
+        'session_revoked'
+    ))
+);

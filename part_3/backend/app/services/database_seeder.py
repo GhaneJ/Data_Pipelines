@@ -44,6 +44,8 @@ PROJECT_MANAGED_TABLES = (
     "api_keys",
     "provider_application_submissions",
     "provider_submission_review_events",
+    "user_registration_requests",
+    "auth_admin_events",
 )
 
 PROJECT_MANAGED_INDEXES = (
@@ -85,6 +87,16 @@ PROJECT_MANAGED_INDEXES = (
     "idx_provider_submission_review_events_actor_user_id",
     "idx_provider_submission_review_events_action",
     "idx_provider_submission_review_events_created_at",
+    "idx_user_registration_requests_username",
+    "idx_user_registration_requests_pending_username_unique",
+    "idx_user_registration_requests_status",
+    "idx_user_registration_requests_provider_id",
+    "idx_user_registration_requests_created_at",
+    "idx_auth_admin_events_actor_user_id",
+    "idx_auth_admin_events_target_user_id",
+    "idx_auth_admin_events_registration_request_id",
+    "idx_auth_admin_events_action",
+    "idx_auth_admin_events_created_at",
 )
 
 CORE_DECISION_ROWS = (
