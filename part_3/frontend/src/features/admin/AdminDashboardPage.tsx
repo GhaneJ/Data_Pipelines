@@ -47,6 +47,11 @@ function ratio(part: number, total: number) {
   return Math.round((part / total) * 100);
 }
 
+function workflowWidth(count: number, maximum: number) {
+  if (count <= 0 || maximum <= 0) return 0;
+  return Math.max(8, Math.round((count / maximum) * 100));
+}
+
 function healthLabel(health: HealthStatus | null, database: DatabaseHealth | null) {
   if (!health || !database) return "Checking";
   if (health.status === "ok" && database.status === "ready") return "Ready";
@@ -113,6 +118,7 @@ export function AdminDashboardPage({ onNavigate }: { onNavigate: (path: string) 
   const providerPercent = useMemo(() => ratio(cards.providerUsers, Math.max(cards.totalUsers, 1)), [cards.providerUsers, cards.totalUsers]);
   const inactivePercent = useMemo(() => ratio(cards.inactiveUsers, Math.max(cards.totalUsers, 1)), [cards.inactiveUsers, cards.totalUsers]);
   const reviewLoad = cards.pendingReviews + cards.underReview + cards.needsChanges;
+  const reviewMaximum = Math.max(cards.pendingReviews, cards.underReview, cards.needsChanges, 1);
   const applicationRows = databaseHealth?.applications?.row_count ?? 0;
   const apiReady = health?.status === "ok";
   const dbReady = databaseHealth?.status === "ready";
@@ -200,12 +206,21 @@ export function AdminDashboardPage({ onNavigate }: { onNavigate: (path: string) 
                   <h3>Provider workflow</h3>
                 </div>
               </div>
-              <div className="horizontal-bars refined-bars">
-                <div><span>Submitted</span><strong style={{ width: `${Math.max(8, ratio(cards.pendingReviews, Math.max(reviewLoad, 1)))}%` }} /></div>
-                <div><span>Under review</span><strong style={{ width: `${Math.max(8, ratio(cards.underReview, Math.max(reviewLoad, 1)))}%` }} /></div>
-                <div><span>Needs changes</span><strong style={{ width: `${Math.max(8, ratio(cards.needsChanges, Math.max(reviewLoad, 1)))}%` }} /></div>
+              <div className="workflow-meters" aria-label="Provider workflow counts">
+                <div className="workflow-meter">
+                  <div className="workflow-meter-header"><span>Submitted</span><strong>{cards.pendingReviews}</strong></div>
+                  <div className="workflow-track"><span style={{ width: `${workflowWidth(cards.pendingReviews, reviewMaximum)}%` }} /></div>
+                </div>
+                <div className="workflow-meter">
+                  <div className="workflow-meter-header"><span>Under review</span><strong>{cards.underReview}</strong></div>
+                  <div className="workflow-track"><span style={{ width: `${workflowWidth(cards.underReview, reviewMaximum)}%` }} /></div>
+                </div>
+                <div className="workflow-meter">
+                  <div className="workflow-meter-header"><span>Needs changes</span><strong>{cards.needsChanges}</strong></div>
+                  <div className="workflow-track"><span style={{ width: `${workflowWidth(cards.needsChanges, reviewMaximum)}%` }} /></div>
+                </div>
               </div>
-              <small className="muted">{cards.finalDecisions} final decisions are preserved as review history.</small>
+              <small className="muted">{cards.finalDecisions} final decision{cards.finalDecisions === 1 ? "" : "s"} are preserved as review history.</small>
             </article>
 
             <article className="panel analytics-panel executive-panel system-panel">

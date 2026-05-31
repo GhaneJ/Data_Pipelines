@@ -62,7 +62,7 @@ function RoutedWorkspace() {
     if (path === "/data" || path === "/data/applications" || path === "/data/stats") return <DataExplorerPage />;
     if (path === "/admin") return <ProtectedRoute role="admin" onNavigate={navigate}><AdminDashboardPage onNavigate={navigate} /></ProtectedRoute>;
     if (path.startsWith("/admin/users")) return <ProtectedRoute role="admin" onNavigate={navigate}><AdminUsersPage /></ProtectedRoute>;
-    if (path.startsWith("/admin/signup-requests")) return <ProtectedRoute role="admin" onNavigate={navigate}><AdminSignupRequestsPage /></ProtectedRoute>;
+    if (path.startsWith("/admin/signup-requests")) return <ProtectedRoute role="admin" onNavigate={navigate}><AdminSignupRequestsPage onNavigate={navigate} /></ProtectedRoute>;
     if (path.startsWith("/admin/provider-submissions")) return <ProtectedRoute role="admin" onNavigate={navigate}><AdminReviewsPage /></ProtectedRoute>;
     if (path === "/admin/api-access") return <ProtectedRoute role="admin" onNavigate={navigate}><AdminApiAccessPage /></ProtectedRoute>;
     if (path === "/provider") return <ProtectedRoute role="provider" onNavigate={navigate}><ProviderDashboardPage onNavigate={navigate} /></ProtectedRoute>;
