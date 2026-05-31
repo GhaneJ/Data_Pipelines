@@ -333,6 +333,54 @@ def ensure_applications_source_year_schema(conn: psycopg.Connection[dict[str, An
         )
 
 
+def ensure_myh_source_files_source_year_schema(conn: psycopg.Connection[dict[str, Any]]) -> None:
+    """Allow the source monitor to record older official MYH source files.
+
+    The live MYH result page still links older Excel workbooks, for example
+    2019 files. These are valid source-file metadata even when the curated
+    applications import validator remains stricter about which years can be
+    loaded into the official applications table. Existing local databases need
+    this code-managed constraint upgrade because CREATE TABLE IF NOT EXISTS
+    does not update already-created check constraints.
+    """
+    if not _constraint_exists(
+        conn,
+        table_name="myh_source_files",
+        constraint_name="myh_source_files_source_year_check",
+    ):
+        return
+
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT pg_get_constraintdef(oid) AS definition
+            FROM pg_constraint
+            WHERE conrelid = 'myh_source_files'::regclass
+              AND conname = 'myh_source_files_source_year_check';
+            """
+        )
+        row = cursor.fetchone()
+
+    definition = str(row["definition"] if isinstance(row, dict) else row[0]) if row else ""
+    if "1900" in definition:
+        return
+
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            ALTER TABLE myh_source_files
+            DROP CONSTRAINT myh_source_files_source_year_check;
+            """
+        )
+        cursor.execute(
+            """
+            ALTER TABLE myh_source_files
+            ADD CONSTRAINT myh_source_files_source_year_check
+            CHECK (source_year IS NULL OR source_year BETWEEN 1900 AND 2100);
+            """
+        )
+
+
 def _read_env(name: str) -> str | None:
     """Return a stripped environment variable value, or None when blank."""
     value = os.getenv(name, "").strip()
@@ -429,6 +477,7 @@ def ensure_database_ready(
         run_safe_sql_file(conn, schema_path)
         ensure_provider_submission_review_schema(conn)
         ensure_applications_source_year_schema(conn)
+        ensure_myh_source_files_source_year_schema(conn)
         run_safe_sql_file(conn, indexes_path)
         seed_core_lookup_rows(conn)
         seed_auth_bootstrap_users(conn)

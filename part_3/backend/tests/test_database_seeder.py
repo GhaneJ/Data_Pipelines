@@ -101,6 +101,13 @@ def test_indexes_sql_contains_required_indexes() -> None:
         )
 
 
+def test_source_monitor_metadata_allows_older_official_result_files() -> None:
+    """The MYH source-file registry must accept old files still linked by MYH."""
+    schema_sql = database_seeder.read_sql_file(database_seeder.SCHEMA_PATH)
+
+    assert "CHECK (source_year IS NULL OR source_year BETWEEN 1900 AND 2100)" in schema_sql
+
+
 def test_startup_sql_files_are_non_destructive() -> None:
     """Startup SQL must not reset, truncate, or delete project data."""
     for sql_path in (database_seeder.SCHEMA_PATH, database_seeder.INDEXES_PATH):
@@ -155,6 +162,8 @@ def test_ensure_database_ready_runs_schema_indexes_and_seed(monkeypatch: pytest.
     assert "CREATE TABLE IF NOT EXISTS provider_application_submissions" in executed_sql
     assert "CREATE TABLE IF NOT EXISTS provider_submission_review_events" in executed_sql
     assert "ADD COLUMN IF NOT EXISTS review_started_at" in executed_sql
+    assert "ALTER TABLE myh_source_files" in executed_sql
+    assert "source_year BETWEEN 1900 AND 2100" in executed_sql
     assert "CREATE INDEX IF NOT EXISTS idx_provider_submissions_provider_id" in executed_sql
     assert "CREATE INDEX IF NOT EXISTS idx_provider_submission_review_events_submission_id" in executed_sql
     assert conn.executed_many

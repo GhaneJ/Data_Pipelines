@@ -240,6 +240,11 @@ def run_source_check(
     config = config or build_config_from_env()
     check_run = repo.create_check_run(conn, source_url=config.source_url)
     check_run_id = str(check_run["id"])
+    # Persist the check-run shell before fetching/parsing. If a later database
+    # write fails, PostgreSQL aborts the current transaction; committing here
+    # lets the error path roll back the failed write and still record the
+    # failed check run plus an admin notification.
+    conn.commit()
     files: list[dict[str, Any]] = []
     new_count = changed_count = known_count = 0
 
@@ -311,6 +316,11 @@ def run_source_check(
             message=message,
         )
     except Exception as exc:
+        # PostgreSQL leaves the transaction unusable after an error such as a
+        # check-constraint violation. Roll back before writing the failed run
+        # result and notification so the admin sees a controlled failure instead
+        # of a secondary InFailedSqlTransaction error.
+        conn.rollback()
         message = "Source check failed. No application data was changed."
         finished = repo.finish_check_run(
             conn,

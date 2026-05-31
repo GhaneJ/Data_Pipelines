@@ -339,7 +339,7 @@ CREATE TABLE IF NOT EXISTS myh_source_files (
     CHECK (btrim(file_name) <> ''),
     CHECK (btrim(file_url) <> ''),
     CHECK (file_type IN ('xlsx', 'xlsm', 'xls', 'csv')),
-    CHECK (source_year IS NULL OR source_year BETWEEN 2020 AND 2100),
+    CHECK (source_year IS NULL OR source_year BETWEEN 1900 AND 2100),
     CHECK (status IN ('new', 'known', 'changed', 'ignored', 'imported', 'failed')),
     CHECK (last_download_size_bytes IS NULL OR last_download_size_bytes >= 0),
     CHECK (last_sha256 IS NULL OR length(last_sha256) = 64)

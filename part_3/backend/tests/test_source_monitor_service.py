@@ -27,6 +27,7 @@ def test_parser_finds_official_downloads_and_ignores_pdfs() -> None:
 
 def test_extract_source_year_returns_latest_visible_year() -> None:
     assert service.extract_source_year("resultat-2024.xlsx", "archive/resultat-2026.xlsx") == 2026
+    assert service.extract_source_year("beviljade-utbildningar-2019.xlsx") == 2019
     assert service.extract_source_year("no-year.xlsx") is None
 
 
@@ -100,3 +101,62 @@ def test_scheduler_is_disabled_by_default() -> None:
     config = service.SourceMonitorConfig(monitor_enabled=False)
 
     assert start_scheduler_if_enabled(config) is None
+
+
+def test_source_check_rolls_back_failed_write_before_recording_failed_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A failed metadata insert should not mask the real source-check failure."""
+
+    class FakeConnection:
+        def __init__(self) -> None:
+            self.committed = False
+            self.rolled_back = False
+
+        def commit(self) -> None:
+            self.committed = True
+
+        def rollback(self) -> None:
+            self.rolled_back = True
+
+    conn = FakeConnection()
+    notifications: list[dict[str, object]] = []
+
+    monkeypatch.setattr(service.repo, "create_check_run", lambda conn, source_url: {"id": "check-1"})
+    monkeypatch.setattr(service.repo, "find_source_file_by_url", lambda conn, file_url: None)
+
+    def fail_create_source_file(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("source_year check violation")
+
+    def finish_check_run(conn: FakeConnection, **kwargs: object) -> dict[str, object]:
+        assert conn.rolled_back is True
+        return {
+            "id": kwargs["check_run_id"],
+            "status": kwargs["status"],
+            "source_url": "https://www.myh.se/source",
+            "started_at": "2026-05-31T00:00:00+02:00",
+            "finished_at": "2026-05-31T00:00:01+02:00",
+            "http_status": kwargs.get("http_status"),
+            "discovered_count": kwargs.get("discovered_count"),
+            "new_count": kwargs.get("new_count"),
+            "changed_count": kwargs.get("changed_count"),
+            "known_count": kwargs.get("known_count"),
+            "message": kwargs.get("message"),
+            "error_message": kwargs.get("error_message"),
+        }
+
+    monkeypatch.setattr(service.repo, "create_source_file", fail_create_source_file)
+    monkeypatch.setattr(service.repo, "finish_check_run", finish_check_run)
+    monkeypatch.setattr(service.repo, "create_notification", lambda conn, **kwargs: notifications.append(kwargs))
+
+    def fake_fetcher(source_url: str, timeout_seconds: int) -> service.PageFetchResponse:
+        return service.PageFetchResponse(
+            200,
+            '<a href="/files/beviljade-utbildningar-sorterade-efter-lan-och-kommun-2019.xlsx">2019 workbook</a>',
+        )
+
+    result = service.run_source_check(conn, fetcher=fake_fetcher)  # type: ignore[arg-type]
+
+    assert conn.committed is True
+    assert conn.rolled_back is True
+    assert result["status"] == "failed"
+    assert "source_year check violation" in result["error_message"]
+    assert notifications[0]["notification_type"] == "source_check_failed"
